@@ -1,10 +1,12 @@
 use std::collections::HashMap;
-use gloo::file::callbacks::{FileReader, read_as_text};
+
+use gloo::file::callbacks::{read_as_text, FileReader};
 use gloo::file::File;
 use regex::Regex;
-use web_sys::{console, Event, HtmlInputElement};
+use web_sys::{console, HtmlInputElement};
 use yew::prelude::*;
 
+use crate::KeyPressEvent::{Note, Strum};
 use crate::LyricEvent::{Lyric, PhraseEnd, PhraseStart, Section};
 
 enum Msg {
@@ -12,40 +14,117 @@ enum Msg {
     Loaded(String, String),
 }
 
-struct Model {
-    readers: HashMap<String, FileReader>,
-    chart: Option<Chart>,
-}
-
-struct Chart {
-    lyric_events: Vec<LyricEvent>,
+trait ChartEvent {
+    fn get_timestamp(&self) -> u32;
 }
 
 #[derive(Debug)]
 enum LyricEvent {
-    PhraseStart(u32),
-    PhraseEnd(u32),
-    Lyric(u32, String),
-    Section(u32, String),
+    PhraseStart { timestamp: u32 },
+    PhraseEnd { timestamp: u32 },
+    Lyric { timestamp: u32, text: String },
+    Section { timestamp: u32, text: String },
+}
+
+impl ChartEvent for LyricEvent {
+    fn get_timestamp(&self) -> u32 {
+        match self {
+            PhraseStart { timestamp } => *timestamp,
+            PhraseEnd { timestamp } => *timestamp,
+            Lyric { timestamp, .. } => *timestamp,
+            Section { timestamp, .. } => *timestamp,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum KeyPressEvent {
+    Note {
+        timestamp: u32,
+        duration: u32,
+        key: u8,
+    },
+    Strum {
+        timestamp: u32,
+        duration: u32,
+    },
+}
+
+impl ChartEvent for KeyPressEvent {
+    fn get_timestamp(&self) -> u32 {
+        match self {
+            Note { timestamp, .. } => *timestamp,
+            Strum { timestamp, .. } => *timestamp,
+        }
+    }
+}
+
+struct Chart {
+    lyric_events: Vec<LyricEvent>,
+    key_presses: Vec<KeyPressEvent>,
 }
 
 impl Chart {
-    fn from(chart: String) -> Result<Self, String> {
-        console::log_1(&"running Chart::from".into());
-        let regex = Regex::new(" {2}(?P<timestamp>\\d+) = E \"(?P<type>[^ \"]+)( (?P<content>[^\"]+))?\"").unwrap();
+    fn from(chart_file: String) -> Result<Self, String> {
+        Ok(Self {
+            lyric_events: Self::get_lyrics(&chart_file),
+            key_presses: Self::get_notes(&chart_file),
+        })
+    }
+
+    fn get_lyrics(chart_file: &String) -> Vec<LyricEvent> {
+        let regex =
+            Regex::new(" {2}(?P<timestamp>\\d+) = E \"(?P<type>[^ \"]+)( (?P<content>[^\"]+))?\"")
+                .unwrap();
         let mut lyrics = vec![];
-        for captures in regex.captures_iter(&chart) {
-            console::log_1(&format!("{:?}", captures).into());
+        for captures in regex.captures_iter(&chart_file) {
             lyrics.push(match &captures["type"] {
-                "section" => Section(captures["timestamp"].parse().expect("parsing error"), captures["content"].to_owned()),
-                "lyric" => Lyric(captures["timestamp"].parse().expect("parsing error"), captures["content"].to_owned()),
-                "phrase_end" => PhraseEnd(captures["timestamp"].parse().expect("parsing error")),
-                "phrase_start" => PhraseStart(captures["timestamp"].parse().expect("parsing error")),
-                x => panic!("unrecognised lyric event type {}", x)
+                "section" => Section {
+                    timestamp: captures["timestamp"].parse().expect("parsing error"),
+                    text: captures["content"].to_owned(),
+                },
+                "lyric" => Lyric {
+                    timestamp: captures["timestamp"].parse().expect("parsing error"),
+                    text: captures["content"].to_owned(),
+                },
+                "phrase_end" => PhraseEnd {
+                    timestamp: captures["timestamp"].parse().expect("parsing error"),
+                },
+                "phrase_start" => PhraseStart {
+                    timestamp: captures["timestamp"].parse().expect("parsing error"),
+                },
+                x => panic!("unrecognised lyric event type {}", x),
             });
         }
-        Ok(Self { lyric_events: lyrics })
+        lyrics
     }
+
+    fn get_notes(chart_file: &String) -> Vec<KeyPressEvent> {
+        let regex =
+            Regex::new(" {2}(?P<timestamp>\\d+) = (?P<type>[NS]) (?P<key>\\d) (?P<duration>\\d)")
+                .unwrap();
+        let mut notes = vec![];
+        for captures in regex.captures_iter(&chart_file) {
+            notes.push(match &captures["type"] {
+                "N" => Note {
+                    timestamp: captures["timestamp"].parse().expect("parsing error"),
+                    duration: captures["duration"].parse().expect("parsing error"),
+                    key: captures["key"].parse().expect("parsing error"),
+                },
+                "S" => Strum {
+                    timestamp: captures["timestamp"].parse().expect("parsing error"),
+                    duration: captures["duration"].parse().expect("parsing error"),
+                },
+                x => panic!("unrecognised keypress type {}", x),
+            });
+        }
+        notes
+    }
+}
+
+struct Model {
+    readers: HashMap<String, FileReader>,
+    chart: Option<Chart>,
 }
 
 impl Component for Model {
@@ -88,6 +167,7 @@ impl Component for Model {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
+        let _link = ctx.link();
         html! {
             <div>
                 <input type="file" accept=".chart" onchange={ctx.link().callback(move |e: Event| {
@@ -107,7 +187,16 @@ impl Component for Model {
                     />
 
                 if let Some(chart) = &self.chart {
-                    <p>{ format!("{:?}", chart.lyric_events)} </p>
+                    <div>
+                        <p>{ "Lyrics:" }</p>
+                        <ul>
+                        { for chart.lyric_events.iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
+                        </ul>
+                        <p>{ "Notes:" }</p>
+                        <ul>
+                        { for chart.key_presses.iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
+                        </ul>
+                    </div>
                 }
             </div>
         }
