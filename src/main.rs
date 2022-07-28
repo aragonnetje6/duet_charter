@@ -4,8 +4,8 @@ use gloo::file::callbacks::{FileReader, read_as_text};
 use gloo::file::File;
 use web_sys::{console, HtmlInputElement};
 use yew::prelude::*;
-use chart::Chart;
 
+use chart::Chart;
 use chart::KeyPressEvent::{Note, Special, TextEvent};
 use chart::LyricEvent::{Lyric, PhraseEnd, PhraseStart, Section};
 use chart::TempoEvent::{Anchor, Beat, TimeSignature};
@@ -43,15 +43,17 @@ impl Component for Model {
                         let file_name = file_name.clone();
                         let link = ctx.link().clone();
                         read_as_text(&file, move |res| {
-                            link.send_message(Msg::Loaded(
-                                file_name,
-                                res.unwrap_or_else(|e| e.to_string()),
-                            ))
+                            link.send_message(
+                                Msg::Loaded(
+                                    file_name,
+                                    res.unwrap_or_else(|e| e.to_string()),
+                                )
+                            )
                         })
                     };
                     self.readers.insert(file_name, task);
                 }
-                true
+                false
             }
             Msg::Loaded(file_name, data) => {
                 self.readers.remove(&file_name);
@@ -83,6 +85,10 @@ impl Component for Model {
 
                 if let Some(chart) = &self.chart {
                     <div>
+                        <p>{ "Properties:" }</p>
+                        <ul>
+                        { for chart.get_properties().iter().map(|(name, content)| html!{ <li> { format!("{}: {}", name, content) } </li> }) }
+                        </ul>
                         <p>{ "SyncTrack:" }</p>
                         <ul>
                         { for chart.get_sync_track().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
@@ -92,9 +98,9 @@ impl Component for Model {
                         { for chart.get_lyrics().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
                         </ul>
                         <p>{ "Notes:" }</p>
-                        <ul>
-                        { for chart.get_key_presses().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
-                        </ul>
+                        <ol>
+                        { for chart.get_key_presses().iter().map(|(difficulty, notes)| html!{ <li> { format!("{:?}", difficulty) } <ul> {for notes.iter().map(|event|html!{ <li> { format!("{:?}", event) } </li> })} </ul> </li> }) }
+                        </ol>
                     </div>
                 }
             </div>
