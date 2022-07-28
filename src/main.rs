@@ -17,12 +17,12 @@ enum Msg {
     Loaded(String, String),
 }
 
-struct Model {
+struct Main {
     readers: HashMap<String, FileReader>,
     chart: Option<Chart>,
 }
 
-impl Component for Model {
+impl Component for Main {
     type Message = Msg;
     type Properties = ();
 
@@ -109,5 +109,5 @@ impl Component for Model {
 }
 
 fn main() {
-    yew::start_app::<Model>();
+    yew::start_app::<Main>();
 }
