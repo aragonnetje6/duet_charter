@@ -17,7 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build
-      run: cargo install trunk; rustup target add wasm32-unknown-unknown; trunk build --release
+      run: tree -C; cargo install trunk; rustup target add wasm32-unknown-unknown; trunk build --release; tree -C
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v3.1.0
       with:
