@@ -87,7 +87,7 @@ pub struct Chart {
 }
 
 impl Chart {
-    pub fn from(chart_file: String) -> Self {
+    pub fn from(chart_file: &str) -> Self {
         // initialise regexes
         let header_regex = Regex::new("\\[(?P<header>[^]]+)]").unwrap();
         let properties_regex = Regex::new(" {2}(?P<property>[^ =]+) = (?P<content>.+)").unwrap();
@@ -118,7 +118,7 @@ impl Chart {
                 "Song" => Self::decode_properties(&properties_regex, &mut properties, section),
                 "SyncTrack" => Self::decode_sync_track(&sync_track_regex, &mut sync_track, section),
                 "Events" => Self::decode_lyrics(&lyrics_regex, &mut lyrics, section),
-                &_ => Self::decode_notes(&notes_regex, &mut key_presses, section, header),
+                &_ => Self::decode_notes(&notes_regex, &mut key_presses, section, &header),
             }
         }
         Self { properties, lyrics, sync_track, key_presses }
@@ -143,7 +143,7 @@ impl Chart {
                 },
                 err => panic!("unrecognised lyric event type {}", err),
             });
-        })
+        });
     }
 
     fn decode_sync_track(regex: &Regex, sync_track: &mut Vec<TempoEvent>, section: &str) {
@@ -161,15 +161,11 @@ impl Chart {
                     timestamp: captures["timestamp"].parse().expect("parsing error"),
                     time_signature: (
                         captures["number1"].parse().expect("parsing error"),
-                        2_u32.pow(if let Some(x) = captures.name("number2") {
-                            x.as_str().parse().expect("parsing error")
-                        } else {
-                            2
-                        }) as u32,
+                        2_u32.pow(captures.name("number2").map_or(2, |x| x.as_str().parse().expect("parsing error")) as u32),
                     ),
                 },
                 err => panic!("unknown SyncTrack event {}", err),
-            })
+            });
         });
     }
 
@@ -179,14 +175,14 @@ impl Chart {
                 captures["property"].to_owned(),
                 captures["content"].to_owned(),
             );
-        })
+        });
     }
 
     fn decode_notes(
         regex: &Regex,
         key_presses: &mut HashMap<String, Vec<KeyPressEvent>>,
         section: &str,
-        header: String,
+        header: &str,
     ) {
         key_presses.insert(
             header.replace('[', "").replace(']', ""),
@@ -213,19 +209,19 @@ impl Chart {
         );
     }
 
-    pub fn get_properties(&self) -> &HashMap<String, String> {
+    pub const fn get_properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
 
-    pub fn get_lyrics(&self) -> &Vec<LyricEvent> {
+    pub const fn get_lyrics(&self) -> &Vec<LyricEvent> {
         &self.lyrics
     }
 
-    pub fn get_sync_track(&self) -> &Vec<TempoEvent> {
+    pub const fn get_sync_track(&self) -> &Vec<TempoEvent> {
         &self.sync_track
     }
 
-    pub fn get_key_presses(&self) -> &HashMap<String, Vec<KeyPressEvent>> {
+    pub const fn get_key_presses(&self) -> &HashMap<String, Vec<KeyPressEvent>> {
         &self.key_presses
     }
 }

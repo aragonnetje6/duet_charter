@@ -48,7 +48,7 @@ impl Component for Main {
                                     file_name,
                                     res.unwrap_or_else(|e| e.to_string()),
                                 )
-                            )
+                            );
                         })
                     };
                     self.readers.insert(file_name, task);
@@ -57,7 +57,7 @@ impl Component for Main {
             }
             Msg::Loaded(file_name, data) => {
                 self.readers.remove(&file_name);
-                self.chart = Some(Chart::from(data));
+                self.chart = Some(Chart::from(&data));
                 true
             }
         }
