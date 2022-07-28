@@ -2,12 +2,13 @@ use std::collections::HashMap;
 
 use gloo::file::callbacks::{read_as_text, FileReader};
 use gloo::file::File;
-use regex::Regex;
+use regex::{Match, Regex};
 use web_sys::{console, HtmlInputElement};
 use yew::prelude::*;
 
-use crate::KeyPressEvent::{Note, Strum};
+use crate::KeyPressEvent::{Note, Special, TextEvent};
 use crate::LyricEvent::{Lyric, PhraseEnd, PhraseStart, Section};
+use crate::TempoEvent::{Anchor, Beat, TimeSignature};
 
 enum Msg {
     Files(Vec<File>),
@@ -44,9 +45,14 @@ enum KeyPressEvent {
         duration: u32,
         key: u8,
     },
-    Strum {
+    Special {
         timestamp: u32,
+        special_type: u32,
         duration: u32,
+    },
+    TextEvent {
+        timestamp: u32,
+        content: String,
     },
 }
 
@@ -54,30 +60,100 @@ impl ChartEvent for KeyPressEvent {
     fn get_timestamp(&self) -> u32 {
         match self {
             Note { timestamp, .. } => *timestamp,
-            Strum { timestamp, .. } => *timestamp,
+            Special { timestamp, .. } => *timestamp,
+            TextEvent { timestamp, .. } => *timestamp,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum TempoEvent {
+    Beat {
+        timestamp: u32,
+        milli_bpm: u64,
+    },
+    TimeSignature {
+        timestamp: u32,
+        time_signature: (u32, u32),
+    },
+    Anchor {
+        timestamp: u32,
+        song_microseconds: u64,
+    },
+}
+
+impl ChartEvent for TempoEvent {
+    fn get_timestamp(&self) -> u32 {
+        match self {
+            Beat { timestamp, .. } => *timestamp,
+            TimeSignature { timestamp, .. } => *timestamp,
+            Anchor { timestamp, .. } => *timestamp,
         }
     }
 }
 
 struct Chart {
-    lyric_events: Vec<LyricEvent>,
-    key_presses: Vec<KeyPressEvent>,
+    properties: HashMap<String, String>,
+    lyrics: Vec<LyricEvent>,
+    sync_track: Vec<TempoEvent>,
+    key_presses: HashMap<String, Vec<KeyPressEvent>>,
 }
 
 impl Chart {
-    fn from(chart_file: String) -> Result<Self, String> {
-        Ok(Self {
-            lyric_events: Self::get_lyrics(&chart_file),
-            key_presses: Self::get_notes(&chart_file),
-        })
-    }
-
-    fn get_lyrics(chart_file: &String) -> Vec<LyricEvent> {
-        let regex =
+    fn from(chart_file: String) -> Self {
+        // initialise regexes
+        let header_regex = Regex::new("\\[(?P<header>[^]]+)]").unwrap();
+        let properties_regex = Regex::new(" {2}(?P<property>[^ =]+) = (?P<content>.+)").unwrap();
+        let sync_track_regex = Regex::new(
+            " {2}(?P<timestamp>\\d+) = (?P<type>\\w+) (?P<number1>\\d+)( (?P<number2>\\d+))?",
+        )
+        .unwrap();
+        let lyrics_regex =
             Regex::new(" {2}(?P<timestamp>\\d+) = E \"(?P<type>[^ \"]+)( (?P<content>[^\"]+))?\"")
                 .unwrap();
+        let notes_regex =
+            Regex::new(" {2}(?P<timestamp>\\d+) = (?P<type>[NSE]) (?P<key>.) (?P<duration>\\d)?")
+                .unwrap();
+
+        // declare output variables
+        let mut properties = HashMap::new();
         let mut lyrics = vec![];
-        for captures in regex.captures_iter(&chart_file) {
+        let mut sync_track = vec![];
+        let mut key_presses = HashMap::new();
+
+        // decode file
+        for section in chart_file.split("}") {
+            let header = match header_regex.find(&section) {
+                None => continue,
+                Some(x) => x.as_str().replace("[", "").replace("]", ""),
+            };
+            match header.as_str() {
+                "Song" => Self::decode_properties(&properties_regex, &mut properties, section),
+                "SyncTrack" => Self::decode_sync_track(&sync_track_regex, &mut sync_track, section),
+                "Events" => Self::decode_lyrics(&lyrics_regex, &mut lyrics, section),
+                &_ => Self::decode_notes(&notes_regex, &mut key_presses, section, header),
+            }
+        }
+        console::log_1(
+            &format!(
+                "{:?}, {}, {}, {}",
+                properties,
+                sync_track.len(),
+                lyrics.len(),
+                key_presses.len()
+            )
+            .into(),
+        );
+        Self {
+            properties,
+            sync_track,
+            lyrics,
+            key_presses,
+        }
+    }
+
+    fn decode_lyrics(lyrics_regex: &Regex, lyrics: &mut Vec<LyricEvent>, section: &str) {
+        lyrics_regex.captures_iter(section).for_each(|captures| {
             lyrics.push(match &captures["type"] {
                 "section" => Section {
                     timestamp: captures["timestamp"].parse().expect("parsing error"),
@@ -93,32 +169,76 @@ impl Chart {
                 "phrase_start" => PhraseStart {
                     timestamp: captures["timestamp"].parse().expect("parsing error"),
                 },
-                x => panic!("unrecognised lyric event type {}", x),
+                err => panic!("unrecognised lyric event type {}", err),
             });
-        }
-        lyrics
+        })
     }
 
-    fn get_notes(chart_file: &String) -> Vec<KeyPressEvent> {
-        let regex =
-            Regex::new(" {2}(?P<timestamp>\\d+) = (?P<type>[NS]) (?P<key>\\d) (?P<duration>\\d)")
-                .unwrap();
-        let mut notes = vec![];
-        for captures in regex.captures_iter(&chart_file) {
-            notes.push(match &captures["type"] {
-                "N" => Note {
+    fn decode_sync_track(regex: &Regex, sync_track: &mut Vec<TempoEvent>, section: &str) {
+        regex.captures_iter(section).for_each(|captures| {
+            sync_track.push(match &captures["type"] {
+                "A" => Anchor {
                     timestamp: captures["timestamp"].parse().expect("parsing error"),
-                    duration: captures["duration"].parse().expect("parsing error"),
-                    key: captures["key"].parse().expect("parsing error"),
+                    song_microseconds: captures["number1"].parse().expect("parsing error"),
                 },
-                "S" => Strum {
+                "B" => Beat {
                     timestamp: captures["timestamp"].parse().expect("parsing error"),
-                    duration: captures["duration"].parse().expect("parsing error"),
+                    milli_bpm: captures["number1"].parse().expect("parsing error"),
                 },
-                x => panic!("unrecognised keypress type {}", x),
-            });
-        }
-        notes
+                "TS" => TimeSignature {
+                    timestamp: captures["timestamp"].parse().expect("parsing error"),
+                    time_signature: (
+                        captures["number1"].parse().expect("parsing error"),
+                        2_u32.pow(if let Some(x) = captures.name("number2") {
+                            x.as_str().parse().expect("parsing error")
+                        } else {
+                            2
+                        }) as u32,
+                    ),
+                },
+                err => panic!("unknown SyncTrack event {}", err),
+            })
+        });
+    }
+
+    fn decode_properties(regex: &Regex, properties: &mut HashMap<String, String>, section: &str) {
+        regex.captures_iter(&section).for_each(|captures| {
+            properties.insert(
+                captures["property"].to_owned(),
+                captures["content"].to_owned(),
+            );
+        })
+    }
+
+    fn decode_notes(
+        regex: &Regex,
+        key_presses: &mut HashMap<String, Vec<KeyPressEvent>>,
+        section: &str,
+        header: String,
+    ) {
+        key_presses.insert(
+            header.replace("[", "").replace("]", "").to_owned(),
+            regex
+                .captures_iter(&section)
+                .map(|captures| match &captures["type"] {
+                    "N" => Note {
+                        timestamp: captures["timestamp"].parse().expect("parsing error"),
+                        duration: captures["duration"].parse().expect("parsing error"),
+                        key: captures["key"].parse().expect("parsing error"),
+                    },
+                    "S" => Special {
+                        timestamp: captures["timestamp"].parse().expect("parsing error"),
+                        special_type: captures["key"].parse().expect("parsing error"),
+                        duration: captures["duration"].parse().expect("parsing error"),
+                    },
+                    "E" => TextEvent {
+                        timestamp: captures["timestamp"].parse().expect("parsing error"),
+                        content: captures["key"].to_owned(),
+                    },
+                    x => panic!("unrecognised keypress type {}", x),
+                })
+                .collect(),
+        );
     }
 }
 
@@ -160,7 +280,9 @@ impl Component for Model {
             }
             Msg::Loaded(file_name, data) => {
                 self.readers.remove(&file_name);
-                self.chart = Some(Chart::from(data).unwrap());
+                console::log_1(&"updating chart".into());
+                self.chart = Some(Chart::from(data));
+                console::log_1(&"update complete".into());
                 true
             }
         }
@@ -188,9 +310,13 @@ impl Component for Model {
 
                 if let Some(chart) = &self.chart {
                     <div>
+                        <p>{ "SyncTrack:" }</p>
+                        <ul>
+                        { for chart.sync_track.iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
+                        </ul>
                         <p>{ "Lyrics:" }</p>
                         <ul>
-                        { for chart.lyric_events.iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
+                        { for chart.lyrics.iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
                         </ul>
                         <p>{ "Notes:" }</p>
                         <ul>
