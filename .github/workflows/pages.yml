@@ -31,14 +31,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Build
-        run: rustup target add wasm32-unknown-unknown; cargo install trunk; trunk build --release
+        run: rustup target add wasm32-unknown-unknown; cargo install trunk; trunk build --release --filehash false --public-url /lyric_charter/
       - name: Setup Pages
         uses: actions/configure-pages@v1
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
           # Upload entire repository
-          path: '.'
+          path: './dist/'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@main
