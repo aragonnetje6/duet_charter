@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use gloo::file::callbacks::{read_as_text, FileReader};
 use gloo::file::File;
-use regex::{Match, Regex};
+use regex::Regex;
 use web_sys::{console, HtmlInputElement};
 use yew::prelude::*;
 
@@ -134,16 +134,6 @@ impl Chart {
                 &_ => Self::decode_notes(&notes_regex, &mut key_presses, section, header),
             }
         }
-        console::log_1(
-            &format!(
-                "{:?}, {}, {}, {}",
-                properties,
-                sync_track.len(),
-                lyrics.len(),
-                key_presses.len()
-            )
-            .into(),
-        );
         Self {
             properties,
             sync_track,
@@ -280,9 +270,7 @@ impl Component for Model {
             }
             Msg::Loaded(file_name, data) => {
                 self.readers.remove(&file_name);
-                console::log_1(&"updating chart".into());
                 self.chart = Some(Chart::from(data));
-                console::log_1(&"update complete".into());
                 true
             }
         }
