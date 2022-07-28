@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use regex::Regex;
 use crate::{Anchor, Beat, Lyric, Note, PhraseEnd, PhraseStart, Section, Special, TextEvent, TimeSignature};
 
-pub trait ChartEvent {
+pub trait TimestampedEvent {
     fn get_timestamp(&self) -> u32;
 }
 
@@ -14,12 +14,12 @@ pub enum LyricEvent {
     Section { timestamp: u32, text: String },
 }
 
-impl ChartEvent for LyricEvent {
+impl TimestampedEvent for LyricEvent {
     fn get_timestamp(&self) -> u32 {
         match self {
-            PhraseStart { timestamp } => *timestamp,
-            PhraseEnd { timestamp } => *timestamp,
-            Lyric { timestamp, .. } => *timestamp,
+            PhraseStart { timestamp } |
+            PhraseEnd { timestamp } |
+            Lyric { timestamp, .. } |
             Section { timestamp, .. } => *timestamp,
         }
     }
@@ -43,11 +43,11 @@ pub enum KeyPressEvent {
     },
 }
 
-impl ChartEvent for KeyPressEvent {
+impl TimestampedEvent for KeyPressEvent {
     fn get_timestamp(&self) -> u32 {
         match self {
-            Note { timestamp, .. } => *timestamp,
-            Special { timestamp, .. } => *timestamp,
+            Note { timestamp, .. } |
+            Special { timestamp, .. } |
             TextEvent { timestamp, .. } => *timestamp,
         }
     }
@@ -69,11 +69,11 @@ pub enum TempoEvent {
     },
 }
 
-impl ChartEvent for TempoEvent {
+impl TimestampedEvent for TempoEvent {
     fn get_timestamp(&self) -> u32 {
         match self {
-            Beat { timestamp, .. } => *timestamp,
-            TimeSignature { timestamp, .. } => *timestamp,
+            Beat { timestamp, .. } |
+            TimeSignature { timestamp, .. } |
             Anchor { timestamp, .. } => *timestamp,
         }
     }
