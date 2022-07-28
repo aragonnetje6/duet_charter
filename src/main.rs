@@ -37,7 +37,7 @@ impl Component for Main {
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Msg::Files(files) => {
-                for file in files.into_iter() {
+                for file in files {
                     let file_name = file.name();
                     let task = {
                         let file_name = file_name.clone();

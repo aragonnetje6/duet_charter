@@ -109,10 +109,10 @@ impl Chart {
         let mut key_presses = HashMap::new();
 
         // decode file
-        for section in chart_file.split("}") {
-            let header = match header_regex.find(&section) {
+        for section in chart_file.split('}') {
+            let header = match header_regex.find(section) {
                 None => continue,
-                Some(x) => x.as_str().replace("[", "").replace("]", ""),
+                Some(x) => x.as_str().replace('[', "").replace(']', ""),
             };
             match header.as_str() {
                 "Song" => Self::decode_properties(&properties_regex, &mut properties, section),
@@ -121,12 +121,7 @@ impl Chart {
                 &_ => Self::decode_notes(&notes_regex, &mut key_presses, section, header),
             }
         }
-        Self {
-            properties,
-            sync_track,
-            lyrics,
-            key_presses,
-        }
+        Self { properties, lyrics, sync_track, key_presses }
     }
 
     fn decode_lyrics(lyrics_regex: &Regex, lyrics: &mut Vec<LyricEvent>, section: &str) {
@@ -179,7 +174,7 @@ impl Chart {
     }
 
     fn decode_properties(regex: &Regex, properties: &mut HashMap<String, String>, section: &str) {
-        regex.captures_iter(&section).for_each(|captures| {
+        regex.captures_iter(section).for_each(|captures| {
             properties.insert(
                 captures["property"].to_owned(),
                 captures["content"].to_owned(),
@@ -194,9 +189,9 @@ impl Chart {
         header: String,
     ) {
         key_presses.insert(
-            header.replace("[", "").replace("]", "").to_owned(),
+            header.replace('[', "").replace(']', ""),
             regex
-                .captures_iter(&section)
+                .captures_iter(section)
                 .map(|captures| match &captures["type"] {
                     "N" => Note {
                         timestamp: captures["timestamp"].parse().expect("parsing error"),
