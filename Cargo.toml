@@ -16,3 +16,4 @@ yew = "0.19.3"
 gloo = "0.8.0"
 js-sys = "0.3.59"
 web-sys = { version = "0.3.59", features = ["Blob"]}
+color-eyre = "0.6.2"

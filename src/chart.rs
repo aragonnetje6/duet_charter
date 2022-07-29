@@ -1,6 +1,11 @@
 use std::collections::HashMap;
+
+use color_eyre::eyre::{eyre, Result};
 use regex::Regex;
-use crate::{Anchor, Beat, Lyric, Note, PhraseEnd, PhraseStart, Section, Special, TextEvent, TimeSignature};
+
+use crate::{
+    Anchor, Beat, Lyric, Note, PhraseEnd, PhraseStart, Section, Special, TextEvent, TimeSignature,
+};
 
 pub trait TimestampedEvent {
     fn get_timestamp(&self) -> u32;
@@ -17,10 +22,10 @@ pub enum LyricEvent {
 impl TimestampedEvent for LyricEvent {
     fn get_timestamp(&self) -> u32 {
         match self {
-            PhraseStart { timestamp } |
-            PhraseEnd { timestamp } |
-            Lyric { timestamp, .. } |
-            Section { timestamp, .. } => *timestamp,
+            PhraseStart { timestamp }
+            | PhraseEnd { timestamp }
+            | Lyric { timestamp, .. }
+            | Section { timestamp, .. } => *timestamp,
         }
     }
 }
@@ -30,7 +35,7 @@ pub enum KeyPressEvent {
     Note {
         timestamp: u32,
         duration: u32,
-        key: u8,
+        key: u32,
     },
     Special {
         timestamp: u32,
@@ -46,9 +51,9 @@ pub enum KeyPressEvent {
 impl TimestampedEvent for KeyPressEvent {
     fn get_timestamp(&self) -> u32 {
         match self {
-            Note { timestamp, .. } |
-            Special { timestamp, .. } |
-            TextEvent { timestamp, .. } => *timestamp,
+            Note { timestamp, .. } | Special { timestamp, .. } | TextEvent { timestamp, .. } => {
+                *timestamp
+            }
         }
     }
 }
@@ -72,9 +77,9 @@ pub enum TempoEvent {
 impl TimestampedEvent for TempoEvent {
     fn get_timestamp(&self) -> u32 {
         match self {
-            Beat { timestamp, .. } |
-            TimeSignature { timestamp, .. } |
-            Anchor { timestamp, .. } => *timestamp,
+            Beat { timestamp, .. } | TimeSignature { timestamp, .. } | Anchor { timestamp, .. } => {
+                *timestamp
+            }
         }
     }
 }
@@ -87,20 +92,17 @@ pub struct Chart {
 }
 
 impl Chart {
-    pub fn from(chart_file: &str) -> Self {
+    pub fn from(chart_file: &str) -> Result<Self> {
         // initialise regexes
-        let header_regex = Regex::new("\\[(?P<header>[^]]+)]").unwrap();
-        let properties_regex = Regex::new(" {2}(?P<property>[^ =]+) = (?P<content>.+)").unwrap();
+        let header_regex = Regex::new("\\[(?P<header>[^]]+)]")?;
+        let properties_regex = Regex::new(" {2}(?P<property>[^ =]+) = (?P<content>.+)")?;
         let sync_track_regex = Regex::new(
             " {2}(?P<timestamp>\\d+) = (?P<type>\\w+) (?P<number1>\\d+)( (?P<number2>\\d+))?",
-        )
-        .unwrap();
+        )?;
         let lyrics_regex =
-            Regex::new(" {2}(?P<timestamp>\\d+) = E \"(?P<type>[^ \"]+)( (?P<content>[^\"]+))?\"")
-                .unwrap();
+            Regex::new(" {2}(?P<timestamp>\\d+) = E \"(?P<type>[^ \"]+)( (?P<text>[^\"]+))?\"")?;
         let notes_regex =
-            Regex::new(" {2}(?P<timestamp>\\d+) = (?P<type>[NSE]) (?P<key>.) (?P<duration>\\d)?")
-                .unwrap();
+            Regex::new(" {2}(?P<timestamp>\\d+) = (?P<type>[NSE]) (?P<key>.) (?P<duration>\\d)?")?;
 
         // declare output variables
         let mut properties = HashMap::new();
@@ -115,67 +117,93 @@ impl Chart {
                 Some(x) => x.as_str().replace('[', "").replace(']', ""),
             };
             match header.as_str() {
-                "Song" => Self::decode_properties(&properties_regex, &mut properties, section),
-                "SyncTrack" => Self::decode_sync_track(&sync_track_regex, &mut sync_track, section),
-                "Events" => Self::decode_lyrics(&lyrics_regex, &mut lyrics, section),
-                &_ => Self::decode_notes(&notes_regex, &mut key_presses, section, &header),
+                "Song" => Self::decode_properties(&properties_regex, &mut properties, section)?,
+                "SyncTrack" => Self::decode_synctrack(&sync_track_regex, &mut sync_track, section)?,
+                "Events" => Self::decode_lyrics(&lyrics_regex, &mut lyrics, section)?,
+                &_ => Self::decode_notes(&notes_regex, &mut key_presses, section, &header)?,
             }
         }
-        Self { properties, lyrics, sync_track, key_presses }
+        Ok(Self {
+            properties,
+            lyrics,
+            sync_track,
+            key_presses,
+        })
     }
 
-    fn decode_lyrics(lyrics_regex: &Regex, lyrics: &mut Vec<LyricEvent>, section: &str) {
-        lyrics_regex.captures_iter(section).for_each(|captures| {
-            lyrics.push(match &captures["type"] {
-                "section" => Section {
-                    timestamp: captures["timestamp"].parse().expect("parsing error"),
-                    text: captures["content"].to_owned(),
-                },
-                "lyric" => Lyric {
-                    timestamp: captures["timestamp"].parse().expect("parsing error"),
-                    text: captures["content"].to_owned(),
-                },
-                "phrase_end" => PhraseEnd {
-                    timestamp: captures["timestamp"].parse().expect("parsing error"),
-                },
-                "phrase_start" => PhraseStart {
-                    timestamp: captures["timestamp"].parse().expect("parsing error"),
-                },
-                err => panic!("unrecognised lyric event type {}", err),
-            });
-        });
+    fn decode_lyrics(regex: &Regex, lyrics: &mut Vec<LyricEvent>, section: &str) -> Result<()> {
+        let new_lyrics = regex
+            .captures_iter(section)
+            .map(|captures| -> Result<LyricEvent> {
+                let timestamp = captures["timestamp"].parse()?;
+                match &captures["type"] {
+                    "section" => Ok(Section {
+                        timestamp,
+                        text: captures["text"].to_owned(),
+                    }),
+                    "lyric" => Ok(Lyric {
+                        timestamp,
+                        text: captures["text"].to_owned(),
+                    }),
+                    "phrase_end" => Ok(PhraseEnd { timestamp }),
+                    "phrase_start" => Ok(PhraseStart { timestamp }),
+                    err => Err(eyre!("unrecognised lyric event type {}", err)),
+                }
+            })
+            .collect::<Result<Vec<LyricEvent>>>()?;
+        lyrics.extend(new_lyrics);
+        Ok(())
     }
 
-    fn decode_sync_track(regex: &Regex, sync_track: &mut Vec<TempoEvent>, section: &str) {
-        regex.captures_iter(section).for_each(|captures| {
-            sync_track.push(match &captures["type"] {
-                "A" => Anchor {
-                    timestamp: captures["timestamp"].parse().expect("parsing error"),
-                    song_microseconds: captures["number1"].parse().expect("parsing error"),
-                },
-                "B" => Beat {
-                    timestamp: captures["timestamp"].parse().expect("parsing error"),
-                    milli_bpm: captures["number1"].parse().expect("parsing error"),
-                },
-                "TS" => TimeSignature {
-                    timestamp: captures["timestamp"].parse().expect("parsing error"),
-                    time_signature: (
-                        captures["number1"].parse().expect("parsing error"),
-                        2_u32.pow(captures.name("number2").map_or(2, |x| x.as_str().parse().expect("parsing error")) as u32),
-                    ),
-                },
-                err => panic!("unknown SyncTrack event {}", err),
-            });
-        });
+    fn decode_synctrack(
+        regex: &Regex,
+        sync_track: &mut Vec<TempoEvent>,
+        section: &str,
+    ) -> Result<()> {
+        let new_sync_track: Vec<TempoEvent> = regex
+            .captures_iter(section)
+            .map(|captures| -> Result<TempoEvent> {
+                let timestamp = captures["timestamp"].parse()?;
+                let value = captures["number1"].parse()?;
+                let denominator = 2_u32.pow(
+                    captures
+                        .name("number2")
+                        .map_or(2, |x| x.as_str().parse().unwrap_or(2)),
+                );
+                let time_signature = (value as u32, denominator);
+                match &captures["type"] {
+                    "A" => Ok(Anchor {
+                        timestamp,
+                        song_microseconds: value,
+                    }),
+                    "B" => Ok(Beat {
+                        timestamp,
+                        milli_bpm: value,
+                    }),
+                    "TS" => Ok(TimeSignature {
+                        timestamp,
+                        time_signature,
+                    }),
+                    err => Err(eyre!("unknown SyncTrack event {}", err)),
+                }
+            })
+            .collect::<Result<_>>()?;
+        sync_track.extend(new_sync_track);
+        Ok(())
     }
 
-    fn decode_properties(regex: &Regex, properties: &mut HashMap<String, String>, section: &str) {
+    fn decode_properties(
+        regex: &Regex,
+        properties: &mut HashMap<String, String>,
+        section: &str,
+    ) -> Result<()> {
         regex.captures_iter(section).for_each(|captures| {
             properties.insert(
                 captures["property"].to_owned(),
                 captures["content"].to_owned(),
             );
         });
+        Ok(())
     }
 
     fn decode_notes(
@@ -183,30 +211,39 @@ impl Chart {
         key_presses: &mut HashMap<String, Vec<KeyPressEvent>>,
         section: &str,
         header: &str,
-    ) {
-        key_presses.insert(
-            header.replace('[', "").replace(']', ""),
-            regex
-                .captures_iter(section)
-                .map(|captures| match &captures["type"] {
-                    "N" => Note {
-                        timestamp: captures["timestamp"].parse().expect("parsing error"),
-                        duration: captures["duration"].parse().expect("parsing error"),
-                        key: captures["key"].parse().expect("parsing error"),
-                    },
-                    "S" => Special {
-                        timestamp: captures["timestamp"].parse().expect("parsing error"),
-                        special_type: captures["key"].parse().expect("parsing error"),
-                        duration: captures["duration"].parse().expect("parsing error"),
-                    },
-                    "E" => TextEvent {
-                        timestamp: captures["timestamp"].parse().expect("parsing error"),
+    ) -> Result<()> {
+        let new_notes: Vec<KeyPressEvent> = regex
+            .captures_iter(section)
+            .map(|captures| -> Result<KeyPressEvent> {
+                let timestamp = captures["timestamp"].parse()?;
+                let duration = captures["duration"].parse()?;
+                match &captures["type"] {
+                    "N" => {
+                        let key = captures["key"].parse()?;
+                        Ok(Note {
+                            timestamp,
+                            duration,
+                            key,
+                        })
+                    }
+                    "S" => {
+                        let special_type = captures["key"].parse()?;
+                        Ok(Special {
+                            timestamp,
+                            duration,
+                            special_type,
+                        })
+                    }
+                    "E" => Ok(TextEvent {
+                        timestamp,
                         content: captures["key"].to_owned(),
-                    },
-                    x => panic!("unrecognised keypress type {}", x),
-                })
-                .collect(),
-        );
+                    }),
+                    x => Err(eyre!("unrecognised keypress type {}", x)),
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+        key_presses.insert(header.replace('[', "").replace(']', ""), new_notes);
+        Ok(())
     }
 
     pub const fn get_properties(&self) -> &HashMap<String, String> {
