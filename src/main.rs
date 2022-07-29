@@ -95,7 +95,25 @@ impl Component for Main {
 
                 if let Some(chart) = &self.chart {
                     <div>
+                        <ol>
+                            <li>
+                                <a href="#properties">{ "Properties" }</a>
+                            </li>
+                            <li>
+                                <a href="#synctrack">{ "Synctrack" }</a>
+                            </li>
+                            <li>
+                                <a href="#lyrics">{ "Lyrics" }</a>
+                            </li>
+                            <li>
+                                <a href="#phrases">{ "Phrases" }</a>
+                            </li>
+                            <li>
+                                <a href="#notes">{ "Notes" }</a>
+                            </li>
+                        </ol>
                         <section id = "properties">
+
                         <h1>{ "Properties:" }</h1>
                         <ul>
                         { for chart.get_properties().iter().map(|(name, content)| html!{ <li> { format!("{}: {}", name, content) } </li> }) }
