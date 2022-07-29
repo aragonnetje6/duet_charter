@@ -270,36 +270,27 @@ impl Chart {
     pub fn get_phrases(&self) -> Result<Vec<Phrase>> {
         self.lyrics
             .iter()
-            .filter(|elem| match elem {
-                Section { .. } | Default { .. } => false,
-                _ => true,
-            })
+            .filter(|elem| !matches!(elem, Section { .. } | Default { .. }))
             .collect::<Vec<_>>()
-            .split_inclusive(|elem| match elem {
-                PhraseStart { .. } => true,
-                _ => false,
-            })
+            .split_inclusive(|elem| matches!(elem, PhraseStart { .. }))
             .filter(|semi_phrase| semi_phrase.len() > 1)
             .map(|mut semi_phrase| {
-                match semi_phrase
+                if let PhraseStart { .. } = semi_phrase
                     .first()
-                    .ok_or(eyre!("Empty semi-phrase {:?}", semi_phrase))?
+                    .ok_or_else(|| eyre!("Empty semi-phrase {:?}", semi_phrase))?
                 {
-                    PhraseStart { .. } => {
-                        semi_phrase = semi_phrase
-                            .split_first()
-                            .ok_or(eyre!("Semi-phrase split failed {:?}", semi_phrase))?
-                            .1
-                    }
-                    _ => {}
+                    semi_phrase = semi_phrase
+                        .split_first()
+                        .ok_or_else(|| eyre!("Semi-phrase split failed {:?}", semi_phrase))?
+                        .1;
                 }
                 let start_timestamp = semi_phrase
                     .first()
-                    .ok_or(eyre!("Empty semi-phrase {:?}", semi_phrase))?
+                    .ok_or_else(|| eyre!("Empty semi-phrase {:?}", semi_phrase))?
                     .get_timestamp();
                 let end_timestamp = match semi_phrase
                     .last()
-                    .ok_or(eyre!("Empty semi-phrase {:?}", semi_phrase))?
+                    .ok_or_else(|| eyre!("Empty semi-phrase {:?}", semi_phrase))?
                 {
                     PhraseStart { timestamp } => timestamp - 1,
                     PhraseEnd { timestamp } => *timestamp,
