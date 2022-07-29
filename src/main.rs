@@ -10,18 +10,22 @@ use chart::Chart;
 use chart::KeyPressEvent::{Note, Special, TextEvent};
 use chart::LyricEvent::{Lyric, PhraseEnd, PhraseStart, Section};
 use chart::TempoEvent::{Anchor, Beat, TimeSignature};
+use crate::phrases::{Phrase, phraseify};
 
 mod chart;
+mod phrases;
 
 enum Msg {
     Files(Vec<File>),
     Loaded(String, String),
+    Parsed(),
 }
 
 struct Main {
     readers: HashMap<String, FileReader>,
     chart: Option<Chart>,
     error: Option<ErrReport>,
+    phrases: Option<Vec<Phrase>>,
 }
 
 impl Component for Main {
@@ -34,10 +38,12 @@ impl Component for Main {
             readers: HashMap::default(),
             chart: None,
             error: None,
+            phrases: None,
         }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+        let link = ctx.link().clone();
         match msg {
             Msg::Files(files) => {
                 for file in files {
@@ -62,21 +68,34 @@ impl Component for Main {
                     Ok(chart) => {
                         self.chart = Some(chart);
                         self.error = None;
+                        link.send_message(Msg::Parsed());
                     }
                     Err(err) => {
                         self.chart = None;
                         self.error = Some(err);
                     }
-                }
+                };
                 true
             }
+            Msg::Parsed() => {
+                match &self.chart {
+                    None => false,
+                    Some(chart) => {
+                        match phraseify(chart.get_lyrics()) {
+                            Ok(phrases) => {self.phrases = Some(phrases)}
+                            Err(x) => {self.error = Some(x)}
+                        };
+                        true
+                    }
+                }
+            },
         }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         let _link = ctx.link();
         html! {
-            <div>
+            <>
                 <input type="file" accept=".chart" onchange={ctx.link().callback(move |e: Event| {
                             let mut result = Vec::new();
                             let input: HtmlInputElement = e.target_unchecked_into();
@@ -94,58 +113,57 @@ impl Component for Main {
                     />
 
                 if let Some(chart) = &self.chart {
-                    <div>
-                        <ol>
-                            <li>
-                                <a href="#properties">{ "Properties" }</a>
-                            </li>
-                            <li>
-                                <a href="#synctrack">{ "Synctrack" }</a>
-                            </li>
-                            <li>
-                                <a href="#lyrics">{ "Lyrics" }</a>
-                            </li>
-                            <li>
-                                <a href="#phrases">{ "Phrases" }</a>
-                            </li>
-                            <li>
-                                <a href="#notes">{ "Notes" }</a>
-                            </li>
-                        </ol>
-                        <section id = "properties">
-
-                        <h1>{ "Properties:" }</h1>
-                        <ul>
-                        { for chart.get_properties().iter().map(|(name, content)| html!{ <li> { format!("{}: {}", name, content) } </li> }) }
-                        </ul>
+                    <>
+                        <section id = "toc">
+                            <h1>{ "Table of Contents" }</h1>
+                            <ol>
+                                <li><a href="#properties">{ "Properties" }</a></li>
+                                <li><a href="#synctrack">{ "Synctrack" }</a></li>
+                                <li><a href="#lyrics">{ "Lyrics" }</a></li>
+                                <li><a href="#notes">{ "Notes" }</a></li>
+                                <li><a href="#phrases">{ "Phrases" }</a></li>
+                            </ol>
                         </section>
-                        <section id = "synctrack">
-                        <h1>{ "SyncTrack:" }</h1>
-                        <ul>
-                        { for chart.get_sync_track().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
-                        </ul>
+                        <section id = "properties">
+                            <h1>{ "Properties:" }</h1>
+                            <a href="#toc">{ "^" }</a>
+                            <ul>
+                                { for chart.get_properties().iter().map(|(name, content)| html!{ <li> { format!("{}: {}", name, content) } </li> }) }
+                            </ul>
+                        </section>
+                            <section id = "synctrack">
+                            <h1>{ "SyncTrack:" }</h1>
+                            <a href="#toc">{ "^" }</a>
+                            <ul>
+                                { for chart.get_sync_track().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
+                            </ul>
                         </section>
                         <section id = "lyrics">
-                        <h1>{ "Lyrics:" }</h1>
-                        <ul>
-                        { for chart.get_lyrics().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
-                        </ul>
-                        </section>
-                        <section id = "phrases">
-                        <h1>{ "Phrases:" }</h1>
-                        <ul>
-                        { for chart.get_phrases().unwrap().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
-                        </ul>
+                            <h1>{ "Lyrics:" }</h1>
+                            <a href="#toc">{ "^" }</a>
+                            <ul>
+                                { for chart.get_lyrics().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
+                            </ul>
                         </section>
                         <section id = "notes">
-                        <h1>{ "Notes:" }</h1>
-                        <ol>
-                        { for chart.get_key_presses().iter().map(|(difficulty, notes)| html!{ <li> { format!("{:?}", difficulty) } <ul> {for notes.iter().map(|event|html!{ <li> { format!("{:?}", event) } </li> })} </ul> </li> }) }
-                        </ol>
+                            <h1>{ "Notes:" }</h1>
+                            <a href="#toc">{ "^" }</a>
+                            <ol>
+                                { for chart.get_key_presses().iter().map(|(difficulty, notes)| html!{ <li> { format!("{:?}", difficulty) } <ul> {for notes.iter().map(|event|html!{ <li> { format!("{:?}", event) } </li> })} </ul> </li> }) }
+                            </ol>
                         </section>
-                    </div>
+                    </>
                 }
-            </div>
+                if let Some(phrases) = &self.phrases {
+                <section id = "phrases">
+                    <h1>{ "Phrases:" }</h1>
+                    <a href="#toc">{ "^" }</a>
+                    <ul>
+                        { for phrases.iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
+                    </ul>
+                </section>
+                }
+            </>
         }
     }
 }
