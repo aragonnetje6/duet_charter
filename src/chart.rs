@@ -87,6 +87,23 @@ impl TimestampedEvent for TempoEvent {
     }
 }
 
+pub struct PhraseLyric {
+    timestamp: u32,
+    text: String,
+}
+
+impl TimestampedEvent for PhraseLyric {
+    fn get_timestamp(&self) -> u32 {
+        self.timestamp
+    }
+}
+
+pub struct Phrase {
+    start_timestamp: u32,
+    end_timestamp: u32,
+    lyrics: Vec<PhraseLyric>,
+}
+
 pub struct Chart {
     properties: HashMap<String, String>,
     lyrics: Vec<LyricEvent>,
@@ -248,6 +265,64 @@ impl Chart {
         Ok(())
     }
 
+    fn get_phrases(&self) -> Result<Vec<Phrase>> {
+        self.lyrics
+            .iter()
+            .filter(|elem| match elem {
+                Section { .. } | Default { .. } => false,
+                _ => true,
+            })
+            .collect::<Vec<_>>()
+            .split_inclusive(|elem| match elem {
+                PhraseStart { .. } => true,
+                _ => false,
+            })
+            .filter(|semi_phrase| semi_phrase.len() > 1)
+            .map(|mut semi_phrase| {
+                match semi_phrase
+                    .first()
+                    .ok_or(eyre!("Empty semi-phrase {:?}", semi_phrase))?
+                {
+                    PhraseStart { .. } => {
+                        semi_phrase = semi_phrase
+                            .split_first()
+                            .ok_or(eyre!("Semi-phrase split failed {:?}", semi_phrase))?
+                            .1
+                    }
+                    _ => {}
+                }
+                let start_timestamp = semi_phrase
+                    .first()
+                    .ok_or(eyre!("Empty semi-phrase {:?}", semi_phrase))?
+                    .get_timestamp();
+                let end_timestamp = match semi_phrase
+                    .last()
+                    .ok_or(eyre!("Empty semi-phrase {:?}", semi_phrase))?
+                {
+                    PhraseStart { timestamp } => timestamp - 1,
+                    PhraseEnd { timestamp } => *timestamp,
+                    Lyric { timestamp, .. } => timestamp + 1,
+                    _ => unreachable!(),
+                };
+                let lyrics: Vec<PhraseLyric> = semi_phrase
+                    .iter()
+                    .filter_map(|elem| match elem {
+                        Lyric { timestamp, text } => Some(PhraseLyric {
+                            timestamp: *timestamp,
+                            text: text.clone(),
+                        }),
+                        _ => None,
+                    })
+                    .collect();
+                Ok(Phrase {
+                    start_timestamp,
+                    end_timestamp,
+                    lyrics,
+                })
+            })
+            .collect::<Result<Vec<Phrase>>>()
+    }
+
     pub const fn get_properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
@@ -276,13 +351,13 @@ mod test {
     use super::*;
 
     #[test]
-    fn system_test() -> Result<()> {
+    fn load_test() -> Result<()> {
         let dir: Vec<_> = fs::read_dir("./charts/")?.collect();
         let bar = ProgressBar::new(dir.len() as u64);
         for folder in dir {
             bar.inc(1);
             let entry = folder?;
-            system_test_helper(&entry).wrap_err(format!(
+            load_test_helper(&entry).wrap_err(format!(
                 "Error occurred for chart file {}",
                 &entry.file_name().to_str().unwrap_or("filename failure")
             ))?;
@@ -291,14 +366,42 @@ mod test {
         Ok(())
     }
 
-    fn system_test_helper(folder: &fs::DirEntry) -> Result<()>{
-        let mut path = folder.path().clone();
+    fn load_test_helper(folder: &fs::DirEntry) -> Result<()> {
+        let mut path = folder.path();
         path.push("notes");
         path.set_extension("chart");
         let mut file = fs::File::open(&path)?;
         let mut file_content = String::new();
         file.read_to_string(&mut file_content)?;
         Chart::from(&file_content)?;
+        Ok(())
+    }
+
+    #[test]
+    fn phrase_test() -> Result<()> {
+        let dir: Vec<_> = fs::read_dir("./charts/")?.collect();
+        let bar = ProgressBar::new(dir.len() as u64);
+        for folder in dir {
+            bar.inc(1);
+            let entry = folder?;
+            phrase_test_helper(&entry).wrap_err(format!(
+                "Error occurred for chart file {}",
+                &entry.file_name().to_str().unwrap_or("filename failure")
+            ))?;
+        }
+        bar.finish();
+        Ok(())
+    }
+
+    fn phrase_test_helper(folder: &fs::DirEntry) -> Result<()> {
+        let mut path = folder.path();
+        path.push("notes");
+        path.set_extension("chart");
+        let mut file = fs::File::open(&path)?;
+        let mut file_content = String::new();
+        file.read_to_string(&mut file_content)?;
+        let chart = Chart::from(&file_content)?;
+        chart.get_phrases()?;
         Ok(())
     }
 }
