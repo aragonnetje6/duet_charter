@@ -2,12 +2,18 @@
 name = "lyric_charter"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Browser based lyric charting tool for Clone Hero .chart files!"
+repository = "https://github.com/aragonnetje6/lyric_charter"
+keywords = ["CloneHero", "web"]
+categories = ["web"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 regex = "1.6.0"
 yew = "0.19.3"
+gloo = "0.8.0"
 js-sys = "0.3.59"
 web-sys = { version = "0.3.59", features = ["Blob"]}
-gloo = "0.8.0"
+color-eyre = "0.6.2"

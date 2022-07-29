@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use gloo::file::callbacks::{FileReader, read_as_text};
+use color_eyre::eyre::{ErrReport, Result};
+use gloo::file::callbacks::{read_as_text, FileReader};
 use gloo::file::File;
 use web_sys::{console, HtmlInputElement};
 use yew::prelude::*;
@@ -20,6 +21,7 @@ enum Msg {
 struct Main {
     readers: HashMap<String, FileReader>,
     chart: Option<Chart>,
+    error: Option<ErrReport>,
 }
 
 impl Component for Main {
@@ -31,24 +33,23 @@ impl Component for Main {
         Self {
             readers: HashMap::default(),
             chart: None,
+            error: None,
         }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Msg::Files(files) => {
-                for file in files.into_iter() {
+                for file in files {
                     let file_name = file.name();
                     let task = {
                         let file_name = file_name.clone();
                         let link = ctx.link().clone();
                         read_as_text(&file, move |res| {
-                            link.send_message(
-                                Msg::Loaded(
-                                    file_name,
-                                    res.unwrap_or_else(|e| e.to_string()),
-                                )
-                            )
+                            link.send_message(Msg::Loaded(
+                                file_name,
+                                res.unwrap_or_else(|e| e.to_string()),
+                            ));
                         })
                     };
                     self.readers.insert(file_name, task);
@@ -57,7 +58,16 @@ impl Component for Main {
             }
             Msg::Loaded(file_name, data) => {
                 self.readers.remove(&file_name);
-                self.chart = Some(Chart::from(data));
+                match Chart::from(&data) {
+                    Ok(chart) => {
+                        self.chart = Some(chart);
+                        self.error = None;
+                    }
+                    Err(err) => {
+                        self.chart = None;
+                        self.error = Some(err);
+                    }
+                }
                 true
             }
         }
@@ -108,6 +118,8 @@ impl Component for Main {
     }
 }
 
-fn main() {
+fn main() -> Result<()> {
+    color_eyre::install()?;
     yew::start_app::<Main>();
+    Ok(())
 }
