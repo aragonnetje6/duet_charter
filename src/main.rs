@@ -95,22 +95,36 @@ impl Component for Main {
 
                 if let Some(chart) = &self.chart {
                     <div>
-                        <p>{ "Properties:" }</p>
+                        <section id = "properties">
+                        <h1>{ "Properties:" }</h1>
                         <ul>
                         { for chart.get_properties().iter().map(|(name, content)| html!{ <li> { format!("{}: {}", name, content) } </li> }) }
                         </ul>
-                        <p>{ "SyncTrack:" }</p>
+                        </section>
+                        <section id = "synctrack">
+                        <h1>{ "SyncTrack:" }</h1>
                         <ul>
                         { for chart.get_sync_track().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
                         </ul>
-                        <p>{ "Lyrics:" }</p>
+                        </section>
+                        <section id = "lyrics">
+                        <h1>{ "Lyrics:" }</h1>
                         <ul>
                         { for chart.get_lyrics().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
                         </ul>
-                        <p>{ "Notes:" }</p>
+                        </section>
+                        <section id = "phrases">
+                        <h1>{ "Phrases:" }</h1>
+                        <ul>
+                        { for chart.get_phrases().unwrap().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
+                        </ul>
+                        </section>
+                        <section id = "notes">
+                        <h1>{ "Notes:" }</h1>
                         <ol>
                         { for chart.get_key_presses().iter().map(|(difficulty, notes)| html!{ <li> { format!("{:?}", difficulty) } <ul> {for notes.iter().map(|event|html!{ <li> { format!("{:?}", event) } </li> })} </ul> </li> }) }
                         </ol>
+                        </section>
                     </div>
                 }
             </div>
