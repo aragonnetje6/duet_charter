@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use color_eyre::eyre::{eyre, Result, WrapErr};
+use color_eyre::eyre::{eyre, Result};
 use regex::Regex;
 
+use crate::chart::LyricEvent::Default;
 use crate::{
     Anchor, Beat, Lyric, Note, PhraseEnd, PhraseStart, Section, Special, TextEvent, TimeSignature,
 };
@@ -17,6 +18,7 @@ pub enum LyricEvent {
     PhraseEnd { timestamp: u32 },
     Lyric { timestamp: u32, text: String },
     Section { timestamp: u32, text: String },
+    Default { timestamp: u32 },
 }
 
 impl TimestampedEvent for LyricEvent {
@@ -25,7 +27,8 @@ impl TimestampedEvent for LyricEvent {
             PhraseStart { timestamp }
             | PhraseEnd { timestamp }
             | Lyric { timestamp, .. }
-            | Section { timestamp, .. } => *timestamp,
+            | Section { timestamp, .. }
+            | Default { timestamp, .. } => *timestamp,
         }
     }
 }
@@ -147,6 +150,7 @@ impl Chart {
                     }),
                     "phrase_end" => Ok(PhraseEnd { timestamp }),
                     "phrase_start" => Ok(PhraseStart { timestamp }),
+                    "Default" => Ok(Default { timestamp }),
                     err => Err(eyre!("unrecognised lyric event type {}", err)),
                 }
             })
@@ -263,26 +267,38 @@ impl Chart {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::fs;
     use std::io::Read;
-    use indicatif::{ProgressBar, ProgressIterator};
+
+    use color_eyre::eyre::WrapErr;
+    use indicatif::ProgressBar;
+
+    use super::*;
 
     #[test]
     fn system_test() -> Result<()> {
-        let dir = fs::read_dir("./charts/")?;//.collect::<Vec<_>>();
-        // let bar = ProgressBar::new(dir.len() as u64);
-        for folder in dir.progress() {
-            // bar.inc(1);
-            let mut path = folder?.path().clone();
-            path.push("notes");
-            path.set_extension("chart");
-            let mut file = fs::File::open(&path)?;
-            let mut file_content = String::new();
-            file.read_to_string(&mut file_content)?;
-            Chart::from(&file_content).wrap_err(format!("Error occurred for chart file {}", &path.to_str().unwrap_or("path failed")))?;
+        let dir: Vec<_> = fs::read_dir("./charts/")?.collect();
+        let bar = ProgressBar::new(dir.len() as u64);
+        for folder in dir {
+            bar.inc(1);
+            let entry = folder?;
+            system_test_helper(&entry).wrap_err(format!(
+                "Error occurred for chart file {}",
+                &entry.file_name().to_str().unwrap_or("filename failure")
+            ))?;
         }
-        // bar.finish();
+        bar.finish();
+        Ok(())
+    }
+
+    fn system_test_helper(folder: &fs::DirEntry) -> Result<()>{
+        let mut path = folder.path().clone();
+        path.push("notes");
+        path.set_extension("chart");
+        let mut file = fs::File::open(&path)?;
+        let mut file_content = String::new();
+        file.read_to_string(&mut file_content)?;
+        Chart::from(&file_content)?;
         Ok(())
     }
 }
