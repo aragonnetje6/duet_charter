@@ -117,7 +117,7 @@ impl Chart {
                 Some(x) => x.as_str().replace('[', "").replace(']', ""),
             };
             match header.as_str() {
-                "Song" => Self::decode_properties(&properties_regex, &mut properties, section)?,
+                "Song" => Self::decode_properties(&properties_regex, &mut properties, section),
                 "SyncTrack" => Self::decode_synctrack(&sync_track_regex, &mut sync_track, section)?,
                 "Events" => Self::decode_lyrics(&lyrics_regex, &mut lyrics, section)?,
                 &_ => Self::decode_notes(&notes_regex, &mut key_presses, section, &header)?,
@@ -165,12 +165,7 @@ impl Chart {
             .map(|captures| -> Result<TempoEvent> {
                 let timestamp = captures["timestamp"].parse()?;
                 let value = captures["number1"].parse()?;
-                let denominator = 2_u32.pow(
-                    captures
-                        .name("number2")
-                        .map_or(2, |x| x.as_str().parse().unwrap_or(2)),
-                );
-                let time_signature = (value as u32, denominator);
+
                 match &captures["type"] {
                     "A" => Ok(Anchor {
                         timestamp,
@@ -180,10 +175,18 @@ impl Chart {
                         timestamp,
                         milli_bpm: value,
                     }),
-                    "TS" => Ok(TimeSignature {
-                        timestamp,
-                        time_signature,
-                    }),
+                    "TS" => {
+                        let denominator = 2_u32.pow(
+                            captures
+                                .name("number2")
+                                .map_or(2, |x| x.as_str().parse().unwrap_or(2)),
+                        );
+                        let time_signature = (captures["number1"].parse()?, denominator);
+                        Ok(TimeSignature {
+                            timestamp,
+                            time_signature,
+                        })
+                    }
                     err => Err(eyre!("unknown SyncTrack event {}", err)),
                 }
             })
@@ -192,18 +195,13 @@ impl Chart {
         Ok(())
     }
 
-    fn decode_properties(
-        regex: &Regex,
-        properties: &mut HashMap<String, String>,
-        section: &str,
-    ) -> Result<()> {
+    fn decode_properties(regex: &Regex, properties: &mut HashMap<String, String>, section: &str) {
         regex.captures_iter(section).for_each(|captures| {
             properties.insert(
                 captures["property"].to_owned(),
                 captures["content"].to_owned(),
             );
         });
-        Ok(())
     }
 
     fn decode_notes(

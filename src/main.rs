@@ -61,11 +61,11 @@ impl Component for Main {
                 match Chart::from(&data) {
                     Ok(chart) => {
                         self.chart = Some(chart);
-                        self.error = None
+                        self.error = None;
                     }
                     Err(err) => {
                         self.chart = None;
-                        self.error = Some(err)
+                        self.error = Some(err);
                     }
                 }
                 true
