@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::{eyre, Result, WrapErr};
 use regex::Regex;
 
 use crate::{
@@ -258,5 +258,31 @@ impl Chart {
 
     pub const fn get_key_presses(&self) -> &HashMap<String, Vec<KeyPressEvent>> {
         &self.key_presses
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::fs;
+    use std::io::Read;
+    use indicatif::{ProgressBar, ProgressIterator};
+
+    #[test]
+    fn system_test() -> Result<()> {
+        let dir = fs::read_dir("./charts/")?;//.collect::<Vec<_>>();
+        // let bar = ProgressBar::new(dir.len() as u64);
+        for folder in dir.progress() {
+            // bar.inc(1);
+            let mut path = folder?.path().clone();
+            path.push("notes");
+            path.set_extension("chart");
+            let mut file = fs::File::open(&path)?;
+            let mut file_content = String::new();
+            file.read_to_string(&mut file_content)?;
+            Chart::from(&file_content).wrap_err(format!("Error occurred for chart file {}", &path.to_str().unwrap_or("path failed")))?;
+        }
+        // bar.finish();
+        Ok(())
     }
 }
