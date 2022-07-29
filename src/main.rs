@@ -107,6 +107,10 @@ impl Component for Main {
                         <ul>
                         { for chart.get_lyrics().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
                         </ul>
+                        <p>{ "Lyrics:" }</p>
+                        <ul>
+                        { for chart.get_phrases().unwrap().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
+                        </ul>
                         <p>{ "Notes:" }</p>
                         <ol>
                         { for chart.get_key_presses().iter().map(|(difficulty, notes)| html!{ <li> { format!("{:?}", difficulty) } <ul> {for notes.iter().map(|event|html!{ <li> { format!("{:?}", event) } </li> })} </ul> </li> }) }

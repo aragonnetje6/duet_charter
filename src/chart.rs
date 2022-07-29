@@ -87,6 +87,7 @@ impl TimestampedEvent for TempoEvent {
     }
 }
 
+#[derive(Debug)]
 pub struct PhraseLyric {
     timestamp: u32,
     text: String,
@@ -98,6 +99,7 @@ impl TimestampedEvent for PhraseLyric {
     }
 }
 
+#[derive(Debug)]
 pub struct Phrase {
     start_timestamp: u32,
     end_timestamp: u32,
@@ -265,7 +267,7 @@ impl Chart {
         Ok(())
     }
 
-    fn get_phrases(&self) -> Result<Vec<Phrase>> {
+    pub fn get_phrases(&self) -> Result<Vec<Phrase>> {
         self.lyrics
             .iter()
             .filter(|elem| match elem {
