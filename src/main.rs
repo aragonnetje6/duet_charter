@@ -11,7 +11,7 @@ use chart::KeyPressEvent::{Note, Special, TextEvent};
 use chart::LyricEvent::{Lyric, PhraseEnd, PhraseStart, Section};
 use chart::TempoEvent::{Anchor, Beat, TimeSignature};
 
-use crate::phrases::{phraseify, Phrase};
+use crate::phrases::PhraseVec;
 
 mod chart;
 mod phrases;
@@ -26,7 +26,7 @@ struct Main {
     readers: HashMap<String, FileReader>,
     chart: Option<Chart>,
     error: Option<ErrReport>,
-    phrases: Option<Vec<Phrase>>,
+    phrases: Option<PhraseVec>,
 }
 
 impl Component for Main {
@@ -83,7 +83,7 @@ impl Component for Main {
             Msg::Parsed() => match &self.chart {
                 None => false,
                 Some(chart) => {
-                    match phraseify(chart.get_lyrics()) {
+                    match PhraseVec::new(chart.get_lyrics()) {
                         Ok(phrases) => self.phrases = Some(phrases),
                         Err(x) => self.error = Some(x),
                     };
@@ -163,7 +163,7 @@ impl Component for Main {
                     <h1>{ "Phrases:" }</h1>
                     <a href="#toc">{ "^" }</a>
                     <ul>
-                        { for phrases.iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
+                        { for phrases.get_phrases().iter().map(|event| html!{ <li> { format!("{}", event) } </li> }) }
                     </ul>
                 </section>
                 }
