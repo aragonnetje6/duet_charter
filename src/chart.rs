@@ -54,7 +54,7 @@ pub enum TempoEvent {
 pub struct Chart {
     properties: HashMap<String, String>,
     lyrics: Vec<LyricEvent>,
-    sync_track: Vec<TempoEvent>,
+    tempo_map: Vec<TempoEvent>,
     key_presses: HashMap<String, Vec<KeyPressEvent>>,
 }
 
@@ -63,7 +63,7 @@ impl Chart {
         // initialise regexes
         let header_regex = Regex::new("\\[(?P<header>[^]]+)]")?;
         let properties_regex = Regex::new(" {2}(?P<property>[^ =]+) = (?P<content>.+)")?;
-        let sync_track_regex = Regex::new(
+        let tempo_map_regex = Regex::new(
             " {2}(?P<timestamp>\\d+) = (?P<type>\\w+) (?P<number1>\\d+)( (?P<number2>\\d+))?",
         )?;
         let lyrics_regex =
@@ -74,7 +74,7 @@ impl Chart {
         // declare output variables
         let mut properties = HashMap::new();
         let mut lyrics = vec![];
-        let mut sync_track = vec![];
+        let mut tempo_map = vec![];
         let mut key_presses = HashMap::new();
 
         // decode file
@@ -85,7 +85,7 @@ impl Chart {
             };
             match header.as_str() {
                 "Song" => Self::decode_properties(&properties_regex, &mut properties, section),
-                "SyncTrack" => Self::decode_synctrack(&sync_track_regex, &mut sync_track, section)?,
+                "SyncTrack" => Self::decode_tempo_map(&tempo_map_regex, &mut tempo_map, section)?,
                 "Events" => Self::decode_lyrics(&lyrics_regex, &mut lyrics, section)?,
                 &_ => Self::decode_notes(&notes_regex, &mut key_presses, section, &header)?,
             }
@@ -93,7 +93,7 @@ impl Chart {
         Ok(Self {
             properties,
             lyrics,
-            sync_track,
+            tempo_map,
             key_presses,
         })
     }
@@ -123,12 +123,12 @@ impl Chart {
         Ok(())
     }
 
-    fn decode_synctrack(
+    fn decode_tempo_map(
         regex: &Regex,
-        sync_track: &mut Vec<TempoEvent>,
+        tempo_map: &mut Vec<TempoEvent>,
         section: &str,
     ) -> Result<()> {
-        let new_sync_track: Vec<TempoEvent> = regex
+        let new_tempo_map: Vec<TempoEvent> = regex
             .captures_iter(section)
             .map(|captures| -> Result<TempoEvent> {
                 let timestamp = captures["timestamp"].parse()?;
@@ -155,11 +155,11 @@ impl Chart {
                             time_signature,
                         })
                     }
-                    err => Err(eyre!("unknown SyncTrack event {}", err)),
+                    err => Err(eyre!("unknown Tempo map event {}", err)),
                 }
             })
             .collect::<Result<_>>()?;
-        sync_track.extend(new_sync_track);
+        tempo_map.extend(new_tempo_map);
         Ok(())
     }
 
@@ -220,8 +220,8 @@ impl Chart {
         &self.lyrics
     }
 
-    pub const fn get_sync_track(&self) -> &Vec<TempoEvent> {
-        &self.sync_track
+    pub const fn get_tempo_map(&self) -> &Vec<TempoEvent> {
+        &self.tempo_map
     }
 
     pub const fn get_key_presses(&self) -> &HashMap<String, Vec<KeyPressEvent>> {

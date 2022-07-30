@@ -122,7 +122,7 @@ impl Component for Main {
                             <h1>{ "Table of Contents" }</h1>
                             <ol>
                                 <li><a href="#properties">{ "Properties" }</a></li>
-                                <li><a href="#synctrack">{ "Synctrack" }</a></li>
+                                <li><a href="#tempomap">{ "Tempo map" }</a></li>
                                 <li><a href="#lyrics">{ "Lyrics" }</a></li>
                                 <li><a href="#notes">{ "Notes" }</a></li>
                                 <li><a href="#phrases">{ "Phrases" }</a></li>
@@ -135,11 +135,11 @@ impl Component for Main {
                                 { for chart.get_properties().iter().map(|(name, content)| html!{ <li> { format!("{}: {}", name, content) } </li> }) }
                             </ul>
                         </section>
-                            <section id = "synctrack">
-                            <h1>{ "SyncTrack:" }</h1>
+                            <section id = "tempomap">
+                            <h1>{ "Tempo map:" }</h1>
                             <a href="#toc">{ "^" }</a>
                             <ul>
-                                { for chart.get_sync_track().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
+                                { for chart.get_tempo_map().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
                             </ul>
                         </section>
                         <section id = "lyrics">
