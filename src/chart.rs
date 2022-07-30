@@ -8,6 +8,10 @@ use crate::{
     Anchor, Beat, Lyric, Note, PhraseEnd, PhraseStart, Section, Special, TextEvent, TimeSignature,
 };
 
+pub trait TimestampedEvent {
+    fn get_timestamp(&self) -> u32;
+}
+
 #[derive(Debug)]
 pub enum LyricEvent {
     PhraseStart { timestamp: u32 },
@@ -15,6 +19,18 @@ pub enum LyricEvent {
     Lyric { timestamp: u32, text: String },
     Section { timestamp: u32, text: String },
     Default { timestamp: u32 },
+}
+
+impl TimestampedEvent for LyricEvent {
+    fn get_timestamp(&self) -> u32 {
+        match self {
+            PhraseStart { timestamp, .. }
+            | PhraseEnd { timestamp, .. }
+            | Lyric { timestamp, .. }
+            | Section { timestamp, .. }
+            | Default { timestamp, .. } => *timestamp,
+        }
+    }
 }
 
 #[derive(Debug)]
