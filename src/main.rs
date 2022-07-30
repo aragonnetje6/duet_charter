@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use color_eyre::eyre::{ErrReport, Result};
+use color_eyre::eyre::{eyre, ErrReport, Result};
 use gloo::file::callbacks::{read_as_text, FileReader};
 use gloo::file::File;
 use web_sys::{console, HtmlInputElement};
@@ -10,13 +10,14 @@ use chart::Chart;
 use chart::KeyPressEvent::{Note, Special, TextEvent};
 use chart::LyricEvent::{Lyric, PhraseEnd, PhraseStart, Section};
 use chart::TempoEvent::{Anchor, Beat, TimeSignature};
-use crate::phrases::{Phrase, phraseify};
+
+use crate::phrases::{phraseify, Phrase};
 
 mod chart;
 mod phrases;
 
 enum Msg {
-    Files(Vec<File>),
+    Files(Result<Vec<File>>),
     Loaded(String, String),
     Parsed(),
 }
@@ -46,19 +47,21 @@ impl Component for Main {
         let link = ctx.link().clone();
         match msg {
             Msg::Files(files) => {
-                for file in files {
-                    let file_name = file.name();
-                    let task = {
-                        let file_name = file_name.clone();
-                        let link = ctx.link().clone();
-                        read_as_text(&file, move |res| {
-                            link.send_message(Msg::Loaded(
-                                file_name,
-                                res.unwrap_or_else(|e| e.to_string()),
-                            ));
-                        })
-                    };
-                    self.readers.insert(file_name, task);
+                if let Ok(files_vec) = files {
+                    for file in files_vec {
+                        let file_name = file.name();
+                        let task = {
+                            let file_name = file_name.clone();
+                            let link = ctx.link().clone();
+                            read_as_text(&file, move |res| {
+                                link.send_message(Msg::Loaded(
+                                    file_name,
+                                    res.unwrap_or_else(|e| e.to_string()),
+                                ));
+                            })
+                        };
+                        self.readers.insert(file_name, task);
+                    }
                 }
                 false
             }
@@ -77,40 +80,41 @@ impl Component for Main {
                 };
                 true
             }
-            Msg::Parsed() => {
-                match &self.chart {
-                    None => false,
-                    Some(chart) => {
-                        match phraseify(chart.get_lyrics()) {
-                            Ok(phrases) => {self.phrases = Some(phrases)}
-                            Err(x) => {self.error = Some(x)}
-                        };
-                        true
-                    }
+            Msg::Parsed() => match &self.chart {
+                None => false,
+                Some(chart) => {
+                    match phraseify(chart.get_lyrics()) {
+                        Ok(phrases) => self.phrases = Some(phrases),
+                        Err(x) => self.error = Some(x),
+                    };
+                    true
                 }
             },
         }
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
+        fn helper(input: &HtmlInputElement) -> Result<Vec<File>> {
+            if let Some(files) = input.files() {
+                js_sys::try_iter(&files)
+                    .unwrap_or(None)
+                    .ok_or_else(|| eyre!("No file"))?
+                    .map(|v| -> Result<web_sys::File> { match v {
+                        Ok(x) => {Ok(web_sys::File::from(x))}
+                        Err(_) => {Err(eyre!("file loading error"))}
+                    }} )
+                    .map(|v| { let v2 = v?; Ok(File::from(v2)) })
+                    .collect()
+            } else {
+                Ok(Vec::new())
+            }
+        }
         let _link = ctx.link();
         html! {
             <>
-                <input type="file" accept=".chart" onchange={ctx.link().callback(move |e: Event| {
-                            let mut result = Vec::new();
-                            let input: HtmlInputElement = e.target_unchecked_into();
-
-                            if let Some(files) = input.files() {
-                                let files = js_sys::try_iter(&files)
-                                    .unwrap()
-                                    .unwrap()
-                                    .map(|v| web_sys::File::from(v.unwrap()))
-                                    .map(File::from);
-                                result.extend(files);
-                            }
-                            Msg::Files(result)
-                        })}
-                    />
+                <input type="file" accept=".chart" onchange={
+                    ctx.link().callback(move |e: Event| Msg::Files(helper(&e.target_unchecked_into())))
+                }/>
 
                 if let Some(chart) = &self.chart {
                     <>
