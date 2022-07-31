@@ -125,7 +125,9 @@ impl Component for Main {
                                 <li><a href="#tempomap">{ "Tempo map" }</a></li>
                                 <li><a href="#lyrics">{ "Lyrics" }</a></li>
                                 <li><a href="#notes">{ "Notes" }</a></li>
-                                <li><a href="#phrases">{ "Phrases" }</a></li>
+                                if self.phrases.is_some() {
+                                    <li><a href="#phrases">{ "Phrases" }</a></li>
+                                }
                             </ol>
                         </section>
                         <section id = "properties">
@@ -159,13 +161,13 @@ impl Component for Main {
                     </>
                 }
                 if let Some(phrases) = &self.phrases {
-                <section id = "phrases">
-                    <h1>{ "Phrases:" }</h1>
-                    <a href="#toc">{ "^" }</a>
-                    <ul>
-                        { for phrases.get_phrases().iter().map(|event| html!{ <li> { format!("{}", event) } </li> }) }
-                    </ul>
-                </section>
+                    <section id = "phrases">
+                        <h1>{ "Phrases:" }</h1>
+                        <a href="#toc">{ "^" }</a>
+                        <ul>
+                            { for phrases.get_phrases().iter().map(|event| html!{ <li> { format!("{}", event) } </li> }) }
+                        </ul>
+                    </section>
                 }
             </>
         }
