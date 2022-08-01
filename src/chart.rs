@@ -138,8 +138,6 @@ impl Chart {
         let header_regex = Regex::new("\\[(?P<header>[^]]+)]")?;
         let universal_regex =
             Regex::new(" {2}(?P<timestamp>\\d+) = (?P<type>\\w+) (?P<content>[^\\n\\r]+)")?;
-        let lyrics_regex =
-            Regex::new(" {2}(?P<timestamp>\\d+) = E \"(?P<type>[^ \"]+)( (?P<text>[^\"]+))?\"")?;
         let notes_regex =
             Regex::new(" {2}(?P<timestamp>\\d+) = (?P<type>[NSE]) (?P<key>.) (?P<duration>\\d)?")?;
 
