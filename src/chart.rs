@@ -158,7 +158,7 @@ impl Chart {
             match header.as_str() {
                 "Song" => Self::decode_properties(&mut properties, section)?,
                 "SyncTrack" => Self::decode_tempo_map(&universal_regex, &mut tempo_map, section)?,
-                "Events" => Self::decode_lyrics(&lyrics_regex, &mut lyrics, section)?,
+                "Events" => Self::decode_lyrics(&universal_regex, &mut lyrics, section)?,
                 &_ => Self::decode_key_presses(&notes_regex, &mut key_presses, section, &header)?,
             }
         }
@@ -245,24 +245,33 @@ impl Chart {
         let new_lyrics = regex
             .captures_iter(section)
             .map(|captures| -> Result<LyricEvent> {
-                let timestamp = captures["timestamp"].parse()?;
-                match &captures["type"] {
-                    "section" => Ok(Section {
-                        timestamp,
-                        text: captures["text"].to_owned(),
-                    }),
-                    "lyric" => Ok(Lyric {
-                        timestamp,
-                        text: captures["text"].to_owned(),
-                    }),
-                    "phrase_end" => Ok(PhraseEnd { timestamp }),
-                    "phrase_start" => Ok(PhraseStart { timestamp }),
-                    "Default" => Ok(OtherLyricEvent {
-                        code: "".to_string(),
-                        timestamp,
-                        content: "".to_string(),
-                    }),
-                    err => Err(eyre!("unrecognised lyric event type {}", err)),
+                let timestamp = read_capture!(captures, "timestamp").parse()?;
+                let code = read_capture!(captures, "type").to_string();
+                let content = read_capture!(captures, "content").replace('"', "");
+                let (content_type, text) = content.split_once(' ').unwrap_or((&*content, ""));
+                let text = text.to_string();
+                match (code.as_str(), content_type) {
+                    ("E", "section") => {
+                        Ok(Section {
+                            timestamp,
+                            text,
+                        })
+                    },
+                    ("E", "lyric") => {
+                        Ok(Lyric {
+                            timestamp,
+                            text,
+                        })
+                    },
+                    ("E", "phrase_end") => Ok(PhraseEnd { timestamp }),
+                    ("E", "phrase_start") => Ok(PhraseStart { timestamp }),
+                    _ => {
+                        Ok(OtherLyricEvent {
+                            code,
+                            timestamp,
+                            content,
+                        })
+                    },
                 }
             })
             .collect::<Result<Vec<LyricEvent>>>()?;
