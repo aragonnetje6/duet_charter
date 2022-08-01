@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use color_eyre::eyre::{eyre, Result};
 use regex::Regex;
 
-use crate::chart::LyricEvent::Default;
+use KeyPressEvent::OtherKeyPress;
+use LyricEvent::OtherLyricEvent;
+use TempoEvent::OtherTempoEvent;
+
 use crate::{
     Anchor, Beat, Lyric, Note, PhraseEnd, PhraseStart, Section, Special, TextEvent, TimeSignature,
 };
@@ -14,11 +17,25 @@ pub trait TimestampedEvent {
 
 #[derive(Debug)]
 pub enum LyricEvent {
-    PhraseStart { timestamp: u32 },
-    PhraseEnd { timestamp: u32 },
-    Lyric { timestamp: u32, text: String },
-    Section { timestamp: u32, text: String },
-    Default { timestamp: u32 },
+    PhraseStart {
+        timestamp: u32,
+    },
+    PhraseEnd {
+        timestamp: u32,
+    },
+    Lyric {
+        timestamp: u32,
+        text: String,
+    },
+    Section {
+        timestamp: u32,
+        text: String,
+    },
+    OtherLyricEvent {
+        code: String,
+        timestamp: u32,
+        content: String,
+    },
 }
 
 impl TimestampedEvent for LyricEvent {
@@ -28,7 +45,7 @@ impl TimestampedEvent for LyricEvent {
             | PhraseEnd { timestamp, .. }
             | Lyric { timestamp, .. }
             | Section { timestamp, .. }
-            | Default { timestamp, .. } => *timestamp,
+            | OtherLyricEvent { timestamp, .. } => *timestamp,
         }
     }
 }
@@ -49,6 +66,11 @@ pub enum KeyPressEvent {
         timestamp: u32,
         content: String,
     },
+    OtherKeyPress {
+        code: String,
+        timestamp: u32,
+        content: String,
+    },
 }
 
 impl TimestampedEvent for KeyPressEvent {
@@ -56,7 +78,8 @@ impl TimestampedEvent for KeyPressEvent {
         match self {
             Note { timestamp, .. }
             | Special { timestamp, .. }
-            | TextEvent { timestamp, .. } => *timestamp,
+            | TextEvent { timestamp, .. }
+            | OtherKeyPress { timestamp, .. } => *timestamp,
         }
     }
 }
@@ -75,6 +98,11 @@ pub enum TempoEvent {
         timestamp: u32,
         song_microseconds: u64,
     },
+    OtherTempoEvent {
+        code: String,
+        timestamp: u32,
+        content: String,
+    },
 }
 
 impl TimestampedEvent for TempoEvent {
@@ -82,7 +110,8 @@ impl TimestampedEvent for TempoEvent {
         match self {
             Beat { timestamp, .. }
             | TimeSignature { timestamp, .. }
-            | Anchor { timestamp, .. } => *timestamp,
+            | Anchor { timestamp, .. }
+            | OtherTempoEvent { timestamp, .. } => *timestamp,
         }
     }
 }
@@ -98,10 +127,8 @@ impl Chart {
     pub fn from(chart_file: &str) -> Result<Self> {
         // initialise regexes
         let header_regex = Regex::new("\\[(?P<header>[^]]+)]")?;
-        let properties_regex = Regex::new(" {2}(?P<property>[^ =]+) = (?P<content>.+)")?;
-        let tempo_map_regex = Regex::new(
-            " {2}(?P<timestamp>\\d+) = (?P<type>\\w+) (?P<number1>\\d+)( (?P<number2>\\d+))?",
-        )?;
+        let universal_regex =
+            Regex::new(" {2}(?P<timestamp>\\d+) = (?P<type>\\w+) (?P<content>[^\\n\\r]+)")?;
         let lyrics_regex =
             Regex::new(" {2}(?P<timestamp>\\d+) = E \"(?P<type>[^ \"]+)( (?P<text>[^\"]+))?\"")?;
         let notes_regex =
@@ -120,10 +147,10 @@ impl Chart {
                 Some(x) => x.as_str().replace('[', "").replace(']', ""),
             };
             match header.as_str() {
-                "Song" => Self::decode_properties(&properties_regex, &mut properties, section),
-                "SyncTrack" => Self::decode_tempo_map(&tempo_map_regex, &mut tempo_map, section)?,
+                "Song" => Self::decode_properties(&mut properties, section)?,
+                "SyncTrack" => Self::decode_tempo_map(&universal_regex, &mut tempo_map, section)?,
                 "Events" => Self::decode_lyrics(&lyrics_regex, &mut lyrics, section)?,
-                &_ => Self::decode_notes(&notes_regex, &mut key_presses, section, &header)?,
+                &_ => Self::decode_key_presses(&notes_regex, &mut key_presses, section, &header)?,
             }
         }
         Ok(Self {
@@ -132,6 +159,87 @@ impl Chart {
             tempo_map,
             key_presses,
         })
+    }
+
+    fn decode_properties(
+        properties: &mut HashMap<String, String>,
+        section: &str,
+    ) -> Result<()> {
+        Regex::new(" {2}(?P<property>[^ =]+) = (?P<content>[^\\n\\r]+)")?
+            .captures_iter(section).try_for_each(|captures| {
+            let property = captures
+                .name("property")
+                .ok_or_else(|| eyre!("no property name found"))?
+                .as_str()
+                .to_owned();
+            let value = captures
+                .name("content")
+                .ok_or_else(|| eyre!("no property value found"))?
+                .as_str()
+                .to_owned();
+            properties.insert(property, value);
+            Ok(())
+        })
+    }
+
+    fn decode_tempo_map(
+        regex: &Regex,
+        tempo_map: &mut Vec<TempoEvent>,
+        section: &str,
+    ) -> Result<()> {
+        let new_tempo_map: Vec<TempoEvent> = regex
+            .captures_iter(section)
+            .map(|captures| -> Result<TempoEvent> {
+                let timestamp = captures["timestamp"].parse()?;
+
+                match &captures["type"] {
+                    "A" => {
+                        let song_microseconds = captures["content"].parse()?;
+                        Ok(Anchor {
+                            timestamp,
+                            song_microseconds,
+                        })
+                    }
+                    "B" => {
+                        let milli_bpm = captures["content"].parse()?;
+                        Ok(Beat {
+                            timestamp,
+                            milli_bpm,
+                        })
+                    }
+                    "TS" => {
+                        let mut args = captures["content"].split(' ');
+                        let numerator = args
+                            .next()
+                            .ok_or_else(|| {
+                                eyre!("No numerator found in {}", captures["content"].to_string())
+                            })?
+                            .parse()?;
+                        let denominator =
+                            2_u32.pow(args.next().map_or(2, |x| x.parse().unwrap_or(2)));
+                        let time_signature = (numerator, denominator);
+                        Ok(TimeSignature {
+                            timestamp,
+                            time_signature,
+                        })
+                    }
+                    other => {
+                        let code = other.to_string();
+                        let content = captures
+                            .name("content")
+                            .map_or_else(|| "", |x| x.as_str())
+                            .to_string();
+                        Ok(OtherTempoEvent {
+                            code,
+                            timestamp,
+                            content,
+                        })
+                    }
+                }
+            })
+            .collect::<Result<_>>()?;
+        tempo_map.extend(new_tempo_map);
+        Ok(())
     }
 
     fn decode_lyrics(regex: &Regex, lyrics: &mut Vec<LyricEvent>, section: &str) -> Result<()> {
@@ -150,7 +258,11 @@ impl Chart {
                     }),
                     "phrase_end" => Ok(PhraseEnd { timestamp }),
                     "phrase_start" => Ok(PhraseStart { timestamp }),
-                    "Default" => Ok(Default { timestamp }),
+                    "Default" => Ok(OtherLyricEvent {
+                        code: "".to_string(),
+                        timestamp,
+                        content: "".to_string(),
+                    }),
                     err => Err(eyre!("unrecognised lyric event type {}", err)),
                 }
             })
@@ -159,56 +271,7 @@ impl Chart {
         Ok(())
     }
 
-    fn decode_tempo_map(
-        regex: &Regex,
-        tempo_map: &mut Vec<TempoEvent>,
-        section: &str,
-    ) -> Result<()> {
-        let new_tempo_map: Vec<TempoEvent> = regex
-            .captures_iter(section)
-            .map(|captures| -> Result<TempoEvent> {
-                let timestamp = captures["timestamp"].parse()?;
-                let value = captures["number1"].parse()?;
-
-                match &captures["type"] {
-                    "A" => Ok(Anchor {
-                        timestamp,
-                        song_microseconds: value,
-                    }),
-                    "B" => Ok(Beat {
-                        timestamp,
-                        milli_bpm: value,
-                    }),
-                    "TS" => {
-                        let denominator = 2_u32.pow(
-                            captures
-                                .name("number2")
-                                .map_or(2, |x| x.as_str().parse().unwrap_or(2)),
-                        );
-                        let time_signature = (captures["number1"].parse()?, denominator);
-                        Ok(TimeSignature {
-                            timestamp,
-                            time_signature,
-                        })
-                    }
-                    err => Err(eyre!("unknown Tempo map event {}", err)),
-                }
-            })
-            .collect::<Result<_>>()?;
-        tempo_map.extend(new_tempo_map);
-        Ok(())
-    }
-
-    fn decode_properties(regex: &Regex, properties: &mut HashMap<String, String>, section: &str) {
-        regex.captures_iter(section).for_each(|captures| {
-            properties.insert(
-                captures["property"].to_owned(),
-                captures["content"].to_owned(),
-            );
-        });
-    }
-
-    fn decode_notes(
+    fn decode_key_presses(
         regex: &Regex,
         key_presses: &mut HashMap<String, Vec<KeyPressEvent>>,
         section: &str,
