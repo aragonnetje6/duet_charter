@@ -169,6 +169,12 @@ impl Component for Main {
                         </ul>
                     </section>
                 }
+                if let Some(err) = &self.error {
+                    <>
+                        <h1>{ "Error:"}</h1>
+                        <p>{ err }</p>
+                    </>
+                }
             </>
         }
     }
