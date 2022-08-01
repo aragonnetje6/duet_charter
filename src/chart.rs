@@ -15,6 +15,15 @@ pub trait TimestampedEvent {
     fn get_timestamp(&self) -> u32;
 }
 
+macro_rules! read_capture {
+    ($captures:expr, $name:expr) => {
+        $captures
+            .name($name)
+            .ok_or_else(|| eyre!("regex does not contain {}", $name))?
+            .as_str()
+    };
+}
+
 #[derive(Debug)]
 pub enum LyricEvent {
     PhraseStart {
@@ -161,25 +170,15 @@ impl Chart {
         })
     }
 
-    fn decode_properties(
-        properties: &mut HashMap<String, String>,
-        section: &str,
-    ) -> Result<()> {
+    fn decode_properties(properties: &mut HashMap<String, String>, section: &str) -> Result<()> {
         Regex::new(" {2}(?P<property>[^ =]+) = (?P<content>[^\\n\\r]+)")?
-            .captures_iter(section).try_for_each(|captures| {
-            let property = captures
-                .name("property")
-                .ok_or_else(|| eyre!("no property name found"))?
-                .as_str()
-                .to_owned();
-            let value = captures
-                .name("content")
-                .ok_or_else(|| eyre!("no property value found"))?
-                .as_str()
-                .to_owned();
-            properties.insert(property, value);
-            Ok(())
-        })
+            .captures_iter(section)
+            .try_for_each(|captures| {
+                let property = read_capture!(captures, "property").to_owned();
+                let value = read_capture!(captures, "content").to_owned();
+                properties.insert(property, value);
+                Ok(())
+            })
     }
 
     fn decode_tempo_map(
@@ -190,25 +189,25 @@ impl Chart {
         let new_tempo_map: Vec<TempoEvent> = regex
             .captures_iter(section)
             .map(|captures| -> Result<TempoEvent> {
-                let timestamp = captures["timestamp"].parse()?;
+                let timestamp = read_capture!(captures, "timestamp").parse()?;
 
-                match &captures["type"] {
+                match read_capture!(captures, "type"){
                     "A" => {
-                        let song_microseconds = captures["content"].parse()?;
+                        let song_microseconds = read_capture!(captures, "content").parse()?;
                         Ok(Anchor {
                             timestamp,
                             song_microseconds,
                         })
                     }
                     "B" => {
-                        let milli_bpm = captures["content"].parse()?;
+                        let milli_bpm = read_capture!(captures, "content").parse()?;
                         Ok(Beat {
                             timestamp,
                             milli_bpm,
                         })
                     }
                     "TS" => {
-                        let mut args = captures["content"].split(' ');
+                        let mut args = read_capture!(captures, "content").split(' ');
                         let numerator = args
                             .next()
                             .ok_or_else(|| {
