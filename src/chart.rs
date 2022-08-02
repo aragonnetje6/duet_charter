@@ -210,9 +210,10 @@ impl Chart {
                     }
                     "TS" => {
                         let mut args = read_capture!(captures, "content").split(' ');
-                        let numerator = parse!(args.next().ok_or_else(|| {
+                        let pre_numerator = args.next().ok_or_else(|| {
                             eyre!("No numerator found in {}", captures["content"].to_string())
-                        })?)?;
+                        })?;
+                        let numerator: u32 = parse!(pre_numerator)?;
                         let denominator =
                             2_u32.pow(args.next().map_or(2, |x| parse!(x).unwrap_or(2)));
                         let time_signature = (numerator, denominator);
