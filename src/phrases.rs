@@ -51,7 +51,7 @@ impl PhraseVec {
             .filter(|elem| {
                 !matches!(
                     elem,
-                    LyricEvent::Section { .. } | LyricEvent::Default { .. }
+                    LyricEvent::Section { .. } | LyricEvent::OtherLyricEvent { .. }
                 )
             })
             .collect::<Vec<_>>()
@@ -181,7 +181,7 @@ mod test {
                 | chart
                     .get_lyrics()
                     .iter()
-                    .all(|x| matches!(x, LyricEvent::Section { .. } | LyricEvent::Default { .. }))
+                    .all(|x| matches!(x, LyricEvent::Section { .. } | LyricEvent::OtherLyricEvent { .. }))
         );
         Ok(())
     }
