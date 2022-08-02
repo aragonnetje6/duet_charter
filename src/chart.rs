@@ -4,7 +4,7 @@ use color_eyre::eyre::{eyre, Result, WrapErr};
 use regex::Regex;
 
 use KeyPressEvent::OtherKeyPress;
-use LyricEvent::OtherLyricEvent;
+use LyricEvent::{DuetLyric, DuetPhraseEnd, DuetPhraseStart, OtherLyricEvent};
 use TempoEvent::OtherTempoEvent;
 
 use crate::{
@@ -46,6 +46,16 @@ pub enum LyricEvent {
         timestamp: u32,
         text: String,
     },
+    DuetPhraseStart {
+        timestamp: u32,
+    },
+    DuetPhraseEnd {
+        timestamp: u32,
+    },
+    DuetLyric {
+        timestamp: u32,
+        text: String,
+    },
     OtherLyricEvent {
         code: String,
         timestamp: u32,
@@ -60,7 +70,10 @@ impl TimestampedEvent for LyricEvent {
             | PhraseEnd { timestamp, .. }
             | Lyric { timestamp, .. }
             | Section { timestamp, .. }
-            | OtherLyricEvent { timestamp, .. } => *timestamp,
+            | OtherLyricEvent { timestamp, .. }
+            | DuetPhraseStart { timestamp, .. }
+            | DuetPhraseEnd { timestamp, .. }
+            | DuetLyric { timestamp, .. } => *timestamp,
         }
     }
 }
@@ -252,9 +265,12 @@ impl Chart {
                 let text = text.to_string();
                 let result = match (code.as_str(), content_type) {
                     ("E", "section") => Section { timestamp, text },
+                    ("E", "phrase_start") => PhraseStart { timestamp },
                     ("E", "lyric") => Lyric { timestamp, text },
                     ("E", "phrase_end") => PhraseEnd { timestamp },
-                    ("E", "phrase_start") => PhraseStart { timestamp },
+                    ("E", "duet_phrase_start") => DuetPhraseStart { timestamp },
+                    ("E", "duet_lyric") => DuetLyric { timestamp, text },
+                    ("E", "duet_phrase_end") => DuetPhraseEnd { timestamp },
                     _ => OtherLyricEvent {
                         code,
                         timestamp,
