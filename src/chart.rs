@@ -24,6 +24,12 @@ macro_rules! read_capture {
     };
 }
 
+macro_rules! parse {
+    ($str:expr) => {
+        $str.trim().parse().wrap_err(format!("{:?}", $str))
+    };
+}
+
 #[derive(Debug)]
 pub enum LyricEvent {
     PhraseStart {
@@ -185,18 +191,18 @@ impl Chart {
         let new_tempo_map: Vec<TempoEvent> = regex
             .captures_iter(section)
             .map(|captures| -> Result<TempoEvent> {
-                let timestamp = read_capture!(captures, "timestamp").parse()?;
+                let timestamp = parse!(read_capture!(captures, "timestamp"))?;
 
                 match read_capture!(captures, "type") {
                     "A" => {
-                        let song_microseconds = read_capture!(captures, "content").parse()?;
+                        let song_microseconds = parse!(read_capture!(captures, "content"))?;
                         Ok(Anchor {
                             timestamp,
                             song_microseconds,
                         })
                     }
                     "B" => {
-                        let milli_bpm = read_capture!(captures, "content").parse()?;
+                        let milli_bpm = parse!(read_capture!(captures, "content"))?;
                         Ok(Beat {
                             timestamp,
                             milli_bpm,
@@ -204,14 +210,11 @@ impl Chart {
                     }
                     "TS" => {
                         let mut args = read_capture!(captures, "content").split(' ');
-                        let numerator = args
-                            .next()
-                            .ok_or_else(|| {
-                                eyre!("No numerator found in {}", captures["content"].to_string())
-                            })?
-                            .parse()?;
+                        let numerator = parse!(args.next().ok_or_else(|| {
+                            eyre!("No numerator found in {}", captures["content"].to_string())
+                        })?)?;
                         let denominator =
-                            2_u32.pow(args.next().map_or(2, |x| x.parse().unwrap_or(2)));
+                            2_u32.pow(args.next().map_or(2, |x| parse!(x).unwrap_or(2)));
                         let time_signature = (numerator, denominator);
                         Ok(TimeSignature {
                             timestamp,
@@ -241,7 +244,7 @@ impl Chart {
         let new_lyrics = regex
             .captures_iter(section)
             .map(|captures| -> Result<LyricEvent> {
-                let timestamp = read_capture!(captures, "timestamp").parse()?;
+                let timestamp = parse!(read_capture!(captures, "timestamp"))?;
                 let code = read_capture!(captures, "type").to_string();
                 let content = read_capture!(captures, "content").replace('"', "");
                 let (content_type, text) = content.split_once(' ').unwrap_or((&*content, ""));
@@ -273,7 +276,7 @@ impl Chart {
         let new_notes: Vec<KeyPressEvent> = regex
             .captures_iter(section)
             .map(|captures| -> Result<KeyPressEvent> {
-                let timestamp = read_capture!(captures, "timestamp").parse()?;
+                let timestamp = parse!(read_capture!(captures, "timestamp"))?;
                 let content = read_capture!(captures, "content").to_string();
                 match read_capture!(captures, "type") {
                     "N" => {
@@ -281,11 +284,8 @@ impl Chart {
                             .split_once(' ')
                             .ok_or_else(|| eyre!("No duration found"))?;
 
-                        let key = key_str.trim().parse()?;
-                        let duration = duration_str
-                            .trim()
-                            .parse()
-                            .wrap_err(format!("{:?}", content))?;
+                        let key = parse!(key_str)?;
+                        let duration = parse!(duration_str)?;
                         Ok(Note {
                             timestamp,
                             duration,
@@ -296,8 +296,8 @@ impl Chart {
                         let (type_str, duration_str) = content
                             .split_once(' ')
                             .ok_or_else(|| eyre!("No duration found"))?;
-                        let special_type = type_str.parse()?;
-                        let duration = duration_str.parse()?;
+                        let special_type = parse!(type_str)?;
+                        let duration = parse!(duration_str)?;
                         Ok(Special {
                             timestamp,
                             duration,
