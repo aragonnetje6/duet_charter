@@ -40,18 +40,19 @@ impl Display for Phrase {
 }
 
 #[derive(Debug)]
-pub struct PhraseVec {
-    data: Vec<Phrase>,
+pub struct LyricPhrases {
+    main: Vec<Phrase>,
+    duet: Vec<Phrase>,
 }
 
-impl PhraseVec {
+impl LyricPhrases {
     pub fn new(lyrics: &[LyricEvent]) -> Result<Self> {
-        let data = lyrics
+        let main = lyrics
             .iter()
             .filter(|elem| {
-                !matches!(
+                matches!(
                     elem,
-                    LyricEvent::Section { .. } | LyricEvent::OtherLyricEvent { .. }
+                    LyricEvent::Lyric { .. } | LyricEvent::PhraseStart { .. } | LyricEvent::PhraseEnd { .. }
                 )
             })
             .collect::<Vec<_>>()
@@ -97,11 +98,66 @@ impl PhraseVec {
                 })
             })
             .collect::<Result<Vec<Phrase>>>()?;
-        Ok(Self { data })
+        let duet = lyrics
+            .iter()
+            .filter(|elem| {
+                matches!(
+                    elem,
+                    LyricEvent::DuetLyric { .. } | LyricEvent::DuetPhraseStart { .. } | LyricEvent::DuetPhraseEnd { .. }
+                )
+            })
+            .collect::<Vec<_>>()
+            .split_inclusive(|elem| matches!(elem, LyricEvent::DuetPhraseStart { .. }))
+            .filter(|semi_phrase| semi_phrase.len() > 1)
+            .map(|mut semi_phrase| {
+                if let LyricEvent::DuetPhraseStart { .. } = semi_phrase
+                    .first()
+                    .ok_or_else(|| eyre!("Empty semi-phrase {:?}", semi_phrase))?
+                {
+                    semi_phrase = semi_phrase
+                        .split_first()
+                        .ok_or_else(|| eyre!("Semi-phrase split failed {:?}", semi_phrase))?
+                        .1;
+                }
+                let start_timestamp = semi_phrase
+                    .first()
+                    .ok_or_else(|| eyre!("Empty semi-phrase {:?}", semi_phrase))?
+                    .get_timestamp();
+                let end_timestamp = match semi_phrase
+                    .last()
+                    .ok_or_else(|| eyre!("Empty semi-phrase {:?}", semi_phrase))?
+                {
+                    LyricEvent::DuetPhraseStart { timestamp } => timestamp - 1,
+                    LyricEvent::DuetPhraseEnd { timestamp } => *timestamp,
+                    LyricEvent::DuetLyric { timestamp, .. } => timestamp + 1,
+                    _ => unreachable!(),
+                };
+                let lyrics: Vec<PhraseLyric> = semi_phrase
+                    .iter()
+                    .filter_map(|elem| match elem {
+                        LyricEvent::DuetLyric { timestamp, text } => Some(PhraseLyric {
+                            timestamp: *timestamp,
+                            text: text.clone(),
+                        }),
+                        _ => None,
+                    })
+                    .collect();
+                Ok(Phrase {
+                    start_timestamp,
+                    end_timestamp,
+                    lyrics,
+                })
+            })
+            .collect::<Result<Vec<Phrase>>>()?;
+        Ok(Self { main, duet })
     }
 
-    pub const fn get_phrases(&self) -> &Vec<Phrase> {
-        &self.data
+    pub const fn get_main_phrases(&self) -> &Vec<Phrase> {
+        &self.main
+    }
+
+    pub const fn get_duet_phrases(&self) -> &Vec<Phrase> {
+        &self.duet
     }
 }
 
@@ -141,7 +197,7 @@ mod test {
         let mut file_content = String::new();
         file.read_to_string(&mut file_content)?;
         let chart = Chart::from(&file_content)?;
-        PhraseVec::new(chart.get_lyrics())?;
+        LyricPhrases::new(chart.get_lyrics())?;
         Ok(())
     }
 
@@ -169,9 +225,9 @@ mod test {
         let mut file_content = String::new();
         file.read_to_string(&mut file_content)?;
         let chart = Chart::from(&file_content)?;
-        let phrases = PhraseVec::new(chart.get_lyrics())?;
+        let phrases = LyricPhrases::new(chart.get_lyrics())?;
         let string = phrases
-            .get_phrases()
+            .get_main_phrases()
             .iter()
             .map(std::string::ToString::to_string)
             .collect::<String>();
