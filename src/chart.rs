@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::{eyre, Result, WrapErr};
 use regex::Regex;
 
 use KeyPressEvent::OtherKeyPress;
@@ -136,10 +136,8 @@ impl Chart {
     pub fn from(chart_file: &str) -> Result<Self> {
         // initialise regexes
         let header_regex = Regex::new("\\[(?P<header>[^]]+)]")?;
-        let universal_regex =
+        let line_regex =
             Regex::new(" {2}(?P<timestamp>\\d+) = (?P<type>\\w+) (?P<content>[^\\n\\r]+)")?;
-        let notes_regex =
-            Regex::new(" {2}(?P<timestamp>\\d+) = (?P<type>[NSE]) (?P<key>.) (?P<duration>\\d)?")?;
 
         // declare output variables
         let mut properties = HashMap::new();
@@ -155,9 +153,9 @@ impl Chart {
             };
             match header.as_str() {
                 "Song" => Self::decode_properties(&mut properties, section)?,
-                "SyncTrack" => Self::decode_tempo_map(&universal_regex, &mut tempo_map, section)?,
-                "Events" => Self::decode_lyrics(&universal_regex, &mut lyrics, section)?,
-                &_ => Self::decode_key_presses(&notes_regex, &mut key_presses, section, &header)?,
+                "SyncTrack" => Self::decode_tempo_map(&line_regex, &mut tempo_map, section)?,
+                "Events" => Self::decode_lyrics(&line_regex, &mut lyrics, section)?,
+                &_ => Self::decode_key_presses(&line_regex, &mut key_presses, section, &header)?,
             }
         }
         Ok(Self {
@@ -189,7 +187,7 @@ impl Chart {
             .map(|captures| -> Result<TempoEvent> {
                 let timestamp = read_capture!(captures, "timestamp").parse()?;
 
-                match read_capture!(captures, "type"){
+                match read_capture!(captures, "type") {
                     "A" => {
                         let song_microseconds = read_capture!(captures, "content").parse()?;
                         Ok(Anchor {
@@ -248,29 +246,18 @@ impl Chart {
                 let content = read_capture!(captures, "content").replace('"', "");
                 let (content_type, text) = content.split_once(' ').unwrap_or((&*content, ""));
                 let text = text.to_string();
-                match (code.as_str(), content_type) {
-                    ("E", "section") => {
-                        Ok(Section {
-                            timestamp,
-                            text,
-                        })
+                let result = match (code.as_str(), content_type) {
+                    ("E", "section") => Section { timestamp, text },
+                    ("E", "lyric") => Lyric { timestamp, text },
+                    ("E", "phrase_end") => PhraseEnd { timestamp },
+                    ("E", "phrase_start") => PhraseStart { timestamp },
+                    _ => OtherLyricEvent {
+                        code,
+                        timestamp,
+                        content,
                     },
-                    ("E", "lyric") => {
-                        Ok(Lyric {
-                            timestamp,
-                            text,
-                        })
-                    },
-                    ("E", "phrase_end") => Ok(PhraseEnd { timestamp }),
-                    ("E", "phrase_start") => Ok(PhraseStart { timestamp }),
-                    _ => {
-                        Ok(OtherLyricEvent {
-                            code,
-                            timestamp,
-                            content,
-                        })
-                    },
-                }
+                };
+                Ok(result)
             })
             .collect::<Result<Vec<LyricEvent>>>()?;
         lyrics.extend(new_lyrics);
@@ -286,11 +273,19 @@ impl Chart {
         let new_notes: Vec<KeyPressEvent> = regex
             .captures_iter(section)
             .map(|captures| -> Result<KeyPressEvent> {
-                let timestamp = captures["timestamp"].parse()?;
-                let duration = captures["duration"].parse()?;
-                match &captures["type"] {
+                let timestamp = read_capture!(captures, "timestamp").parse()?;
+                let content = read_capture!(captures, "content").to_string();
+                match read_capture!(captures, "type") {
                     "N" => {
-                        let key = captures["key"].parse()?;
+                        let (key_str, duration_str) = content
+                            .split_once(' ')
+                            .ok_or_else(|| eyre!("No duration found"))?;
+
+                        let key = key_str.trim().parse()?;
+                        let duration = duration_str
+                            .trim()
+                            .parse()
+                            .wrap_err(format!("{:?}", content))?;
                         Ok(Note {
                             timestamp,
                             duration,
@@ -298,18 +293,23 @@ impl Chart {
                         })
                     }
                     "S" => {
-                        let special_type = captures["key"].parse()?;
+                        let (type_str, duration_str) = content
+                            .split_once(' ')
+                            .ok_or_else(|| eyre!("No duration found"))?;
+                        let special_type = type_str.parse()?;
+                        let duration = duration_str.parse()?;
                         Ok(Special {
                             timestamp,
                             duration,
                             special_type,
                         })
                     }
-                    "E" => Ok(TextEvent {
+                    "E" => Ok(TextEvent { timestamp, content }),
+                    other => Ok(OtherKeyPress {
+                        code: other.to_string(),
                         timestamp,
-                        content: captures["key"].to_owned(),
+                        content,
                     }),
-                    x => Err(eyre!("unrecognised keypress type {}", x)),
                 }
             })
             .collect::<Result<Vec<_>>>()?;
