@@ -9,7 +9,7 @@ categories = ["parser-implementations", "games", "game-development"]
 license-file = "LICENSE.md"
 
 [dependencies]
-lyric_charter_lib = { path = "../lyric_charter_lib" }
+lyric_charter_lib = { path = "../lyric_charter_lib", version = "0.1.0" }
 gloo = "0.8.0"
 js-sys = "0.3.59"
 web-sys = { version = "0.3.59", features = ["Blob"] }
