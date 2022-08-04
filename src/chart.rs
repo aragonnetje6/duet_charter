@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use color_eyre::eyre::{eyre, Result, WrapErr};
+use eyre::{eyre, Result, WrapErr};
 use regex::Regex;
 
 use KeyPressEvent::OtherKeyPress;
-use LyricEvent::OtherLyricEvent;
+use LyricEvent::{DuetLyric, DuetPhraseEnd, DuetPhraseStart, OtherLyricEvent};
 use TempoEvent::OtherTempoEvent;
 
 use crate::{
@@ -46,6 +46,16 @@ pub enum LyricEvent {
         timestamp: u32,
         text: String,
     },
+    DuetPhraseStart {
+        timestamp: u32,
+    },
+    DuetPhraseEnd {
+        timestamp: u32,
+    },
+    DuetLyric {
+        timestamp: u32,
+        text: String,
+    },
     OtherLyricEvent {
         code: String,
         timestamp: u32,
@@ -60,7 +70,10 @@ impl TimestampedEvent for LyricEvent {
             | PhraseEnd { timestamp, .. }
             | Lyric { timestamp, .. }
             | Section { timestamp, .. }
-            | OtherLyricEvent { timestamp, .. } => *timestamp,
+            | OtherLyricEvent { timestamp, .. }
+            | DuetPhraseStart { timestamp, .. }
+            | DuetPhraseEnd { timestamp, .. }
+            | DuetLyric { timestamp, .. } => *timestamp,
         }
     }
 }
@@ -131,6 +144,7 @@ impl TimestampedEvent for TempoEvent {
     }
 }
 
+#[derive(Debug)]
 pub struct Chart {
     properties: HashMap<String, String>,
     lyrics: Vec<LyricEvent>,
@@ -252,9 +266,12 @@ impl Chart {
                 let text = text.to_string();
                 let result = match (code.as_str(), content_type) {
                     ("E", "section") => Section { timestamp, text },
+                    ("E", "phrase_start") => PhraseStart { timestamp },
                     ("E", "lyric") => Lyric { timestamp, text },
                     ("E", "phrase_end") => PhraseEnd { timestamp },
-                    ("E", "phrase_start") => PhraseStart { timestamp },
+                    ("E", "duet_phrase_start") => DuetPhraseStart { timestamp },
+                    ("E", "duet_lyric") => DuetLyric { timestamp, text },
+                    ("E", "duet_phrase_end") => DuetPhraseEnd { timestamp },
                     _ => OtherLyricEvent {
                         code,
                         timestamp,
@@ -340,24 +357,20 @@ mod test {
     use std::fs;
     use std::io::Read;
 
-    use color_eyre::eyre::WrapErr;
-    use indicatif::ProgressBar;
+    use eyre::WrapErr;
 
     use super::*;
 
     #[test]
     fn load_test() -> Result<()> {
         let dir: Vec<_> = fs::read_dir("./charts/")?.collect();
-        let bar = ProgressBar::new(dir.len() as u64);
         for folder in dir {
-            bar.inc(1);
             let entry = folder?;
             load_test_helper(&entry).wrap_err(format!(
                 "Error occurred for chart file {}",
                 &entry.file_name().to_str().unwrap_or("filename failure")
             ))?;
         }
-        bar.finish();
         Ok(())
     }
 
