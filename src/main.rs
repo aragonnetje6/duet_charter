@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use color_eyre::eyre::{eyre, ErrReport, Result};
+use eyre::{eyre, ErrReport, Result};
 use gloo::file::callbacks::{read_as_text, FileReader};
 use gloo::file::File;
 use web_sys::{console, HtmlInputElement};
@@ -185,7 +185,6 @@ impl Component for Main {
 }
 
 fn main() -> Result<()> {
-    color_eyre::install()?;
     yew::start_app::<Main>();
     Ok(())
 }

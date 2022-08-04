@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
 
-use color_eyre::eyre::Result;
+use eyre::Result;
 
 use crate::chart::LyricEvent;
 use crate::chart::TimestampedEvent;

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use color_eyre::eyre::{eyre, Result, WrapErr};
+use eyre::{eyre, Result, WrapErr};
 use regex::Regex;
 
 use KeyPressEvent::OtherKeyPress;
@@ -357,7 +357,7 @@ mod test {
     use std::fs;
     use std::io::Read;
 
-    use color_eyre::eyre::WrapErr;
+    use eyre::WrapErr;
 
     use super::*;
 
