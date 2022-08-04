@@ -1,8 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
 
-use eyre::Result;
-
 use crate::chart::LyricEvent;
 use crate::chart::TimestampedEvent;
 
@@ -137,7 +135,7 @@ mod test {
     use std::fs;
     use std::io::Read;
 
-    use eyre::WrapErr;
+    use eyre::{WrapErr, Result};
 
     use crate::chart::Chart;
 
@@ -145,7 +143,7 @@ mod test {
 
     #[test]
     fn phrase_loading() -> Result<()> {
-        let dir: Vec<_> = fs::read_dir("./charts/")?.collect();
+        let dir: Vec<_> = fs::read_dir("../charts/")?.collect();
         for folder in dir {
             let entry = folder?;
             phrase_loading_helper(&entry).wrap_err(format!(
@@ -177,7 +175,7 @@ mod test {
 
     #[test]
     fn phrase_to_string() -> Result<()> {
-        let dir: Vec<_> = fs::read_dir("./charts/")?.collect();
+        let dir: Vec<_> = fs::read_dir("../charts/")?.collect();
         for folder in dir {
             let entry = folder?;
             phrase_to_string_helper(&entry).wrap_err(format!(

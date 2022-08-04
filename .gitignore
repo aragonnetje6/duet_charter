@@ -1,4 +1,4 @@
-/target
-/.idea
-/dist
-/.vscode
+debug/
+target/
+Cargo.lock
+.idea/
