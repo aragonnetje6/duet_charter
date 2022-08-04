@@ -3,4 +3,3 @@ target/
 */dist/
 *.lock
 /.vscode
-*.lock
