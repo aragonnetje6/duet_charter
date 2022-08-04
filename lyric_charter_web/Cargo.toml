@@ -5,7 +5,7 @@ edition = "2021"
 description = "Browser based lyric charting tool for Clone Hero .chart files!"
 repository = "https://github.com/aragonnetje6/lyric_charter"
 keywords = ["CloneHero", "web"]
-categories = ["Parser Implementations", "Games", "Game Development"]
+categories = ["parser-implementations", "games", "game-development"]
 license-file = "LICENSE.md"
 
 [dependencies]
