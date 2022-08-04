@@ -35,7 +35,7 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v1
       - name: Build with Trunk
-        run: cargo install trunk; rustup target add wasm32-unknown-unknown; trunk build --release --public-url /lyric_charter/;
+        run: cargo install trunk; rustup target add wasm32-unknown-unknown; trunk build --release --public-url /lyric_charter/ ./lyric_charter_web/index.html;
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
         with:
