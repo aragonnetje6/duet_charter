@@ -1,4 +1,5 @@
-debug/
 target/
 Cargo.lock
 .idea/
+*/dist/
+*.lock

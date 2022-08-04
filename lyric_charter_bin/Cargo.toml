@@ -2,13 +2,12 @@
 name = "lyric_charter_bin"
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
 description = "Commandline lyric charting tool for Clone Hero .chart files!"
 repository = "https://github.com/aragonnetje6/lyric_charter"
 keywords = ["CloneHero", "cli"]
 categories = ["Parser Implementations", "Games", "Game Development"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license-file = "LICENSE.md"
 
 [dependencies]
 lyric_charter_lib = { path = "../lyric_charter_lib" }
+clap = "3.2.16"
