@@ -137,7 +137,7 @@ mod test {
     use std::fs;
     use std::io::Read;
 
-    use color_eyre::eyre::WrapErr;
+    use eyre::WrapErr;
 
     use crate::chart::Chart;
 
