@@ -3,13 +3,9 @@ use std::collections::HashMap;
 use eyre::{eyre, Result, WrapErr};
 use regex::Regex;
 
-use KeyPressEvent::OtherKeyPress;
-use LyricEvent::{DuetLyric, DuetPhraseEnd, DuetPhraseStart, OtherLyricEvent};
-use TempoEvent::OtherTempoEvent;
-
-use crate::{
-    Anchor, Beat, Lyric, Note, PhraseEnd, PhraseStart, Section, Special, TextEvent, TimeSignature,
-};
+use LyricEvent::{Lyric, PhraseEnd, PhraseStart, Section, DuetLyric, DuetPhraseEnd, DuetPhraseStart, OtherLyricEvent};
+use KeyPressEvent::{Note, Special, TextEvent, OtherKeyPress};
+use TempoEvent::{Anchor, Beat, TimeSignature, OtherTempoEvent};
 
 pub trait TimestampedEvent {
     fn get_timestamp(&self) -> u32;
@@ -363,7 +359,7 @@ mod test {
 
     #[test]
     fn load_test() -> Result<()> {
-        let dir: Vec<_> = fs::read_dir("./charts/")?.collect();
+        let dir: Vec<_> = fs::read_dir("../charts/")?.collect();
         for folder in dir {
             let entry = folder?;
             load_test_helper(&entry).wrap_err(format!(

@@ -1,20 +1,14 @@
 use std::collections::HashMap;
 
-use eyre::{eyre, ErrReport, Result};
-use gloo::file::callbacks::{read_as_text, FileReader};
+use eyre::{ErrReport, eyre, Result};
+use gloo::file::callbacks::{FileReader, read_as_text};
 use gloo::file::File;
 use web_sys::{console, HtmlInputElement};
 use yew::prelude::*;
 
-use chart::Chart;
-use chart::KeyPressEvent::{Note, Special, TextEvent};
-use chart::LyricEvent::{Lyric, PhraseEnd, PhraseStart, Section};
-use chart::TempoEvent::{Anchor, Beat, TimeSignature};
+use lyric_charter_lib::chart::Chart;
 
-use crate::phrases::LyricPhrases;
-
-mod chart;
-mod phrases;
+use lyric_charter_lib::phrases::LyricPhrases;
 
 enum Msg {
     Files(Result<Vec<File>>),
@@ -184,7 +178,6 @@ impl Component for Main {
     }
 }
 
-fn main() -> Result<()> {
+fn main() {
     yew::start_app::<Main>();
-    Ok(())
 }
