@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
 
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::Result;
 
 use crate::chart::LyricEvent;
 use crate::chart::TimestampedEvent;
@@ -46,44 +46,52 @@ pub struct LyricPhrases {
 }
 
 impl LyricPhrases {
-    pub fn new(lyrics: &[LyricEvent]) -> Result<Self> {
-        let main = lyrics
+    pub fn new(lyrics_events: &[LyricEvent]) -> Self {
+        let duet_only = lyrics_events
             .iter()
-            .filter(|elem| {
-                matches!(
-                    elem,
-                    LyricEvent::Lyric { .. } | LyricEvent::PhraseStart { .. } | LyricEvent::PhraseEnd { .. }
-                )
+            .filter_map(|event| match event {
+                LyricEvent::DuetPhraseStart { timestamp } => Some(LyricEvent::PhraseStart {
+                    timestamp: *timestamp,
+                }),
+                LyricEvent::DuetPhraseEnd { timestamp } => Some(LyricEvent::PhraseEnd {
+                    timestamp: *timestamp,
+                }),
+                LyricEvent::DuetLyric { timestamp, text } => Some(LyricEvent::Lyric {
+                    timestamp: *timestamp,
+                    text: text.clone(),
+                }),
+                LyricEvent::PhraseStart { .. }
+                | LyricEvent::PhraseEnd { .. }
+                | LyricEvent::Lyric { .. }
+                | LyricEvent::Section { .. }
+                | LyricEvent::OtherLyricEvent { .. } => None,
             })
-            .collect::<Vec<_>>()
-            .split_inclusive(|elem| matches!(elem, LyricEvent::PhraseStart { .. }))
-            .filter(|semi_phrase| semi_phrase.len() > 1)
-            .map(|mut semi_phrase| {
-                if let LyricEvent::PhraseStart { .. } = semi_phrase
-                    .first()
-                    .ok_or_else(|| eyre!("Empty semi-phrase {:?}", semi_phrase))?
-                {
-                    semi_phrase = semi_phrase
-                        .split_first()
-                        .ok_or_else(|| eyre!("Semi-phrase split failed {:?}", semi_phrase))?
-                        .1;
-                }
-                let start_timestamp = semi_phrase
-                    .first()
-                    .ok_or_else(|| eyre!("Empty semi-phrase {:?}", semi_phrase))?
-                    .get_timestamp();
-                let end_timestamp = match semi_phrase
-                    .last()
-                    .ok_or_else(|| eyre!("Empty semi-phrase {:?}", semi_phrase))?
-                {
-                    LyricEvent::PhraseStart { timestamp } => timestamp - 1,
-                    LyricEvent::PhraseEnd { timestamp } => *timestamp,
-                    LyricEvent::Lyric { timestamp, .. } => timestamp + 1,
-                    _ => unreachable!(),
-                };
-                let lyrics: Vec<PhraseLyric> = semi_phrase
+            .collect::<Vec<LyricEvent>>();
+        let main = Self::parse_phrases_from(lyrics_events);
+        let duet = Self::parse_phrases_from(&duet_only);
+        Self { main, duet }
+    }
+
+    fn parse_phrases_from(lyric_events: &[LyricEvent]) -> Vec<Phrase> {
+        let timestamps: Vec<u32> = lyric_events
+            .iter()
+            .filter_map(|x| match x {
+                LyricEvent::PhraseStart { timestamp } => Some(*timestamp),
+                _ => None,
+            })
+            .collect();
+        timestamps
+            .iter()
+            .enumerate()
+            .map(|(i, low)| {
+                let high = timestamps.get(i + 1);
+                let lyrics: Vec<PhraseLyric> = lyric_events
                     .iter()
-                    .filter_map(|elem| match elem {
+                    .filter(|lyric| {
+                        (high.is_none() || high.unwrap_or(&0) > &lyric.get_timestamp())
+                            && lyric.get_timestamp() >= *low
+                    })
+                    .filter_map(|lyric| match lyric {
                         LyricEvent::Lyric { timestamp, text } => Some(PhraseLyric {
                             timestamp: *timestamp,
                             text: text.clone(),
@@ -91,65 +99,28 @@ impl LyricPhrases {
                         _ => None,
                     })
                     .collect();
-                Ok(Phrase {
-                    start_timestamp,
-                    end_timestamp,
-                    lyrics,
-                })
-            })
-            .collect::<Result<Vec<Phrase>>>()?;
-        let duet = lyrics
-            .iter()
-            .filter(|elem| {
-                matches!(
-                    elem,
-                    LyricEvent::DuetLyric { .. } | LyricEvent::DuetPhraseStart { .. } | LyricEvent::DuetPhraseEnd { .. }
-                )
-            })
-            .collect::<Vec<_>>()
-            .split_inclusive(|elem| matches!(elem, LyricEvent::DuetPhraseStart { .. }))
-            .filter(|semi_phrase| semi_phrase.len() > 1)
-            .map(|mut semi_phrase| {
-                if let LyricEvent::DuetPhraseStart { .. } = semi_phrase
-                    .first()
-                    .ok_or_else(|| eyre!("Empty semi-phrase {:?}", semi_phrase))?
-                {
-                    semi_phrase = semi_phrase
-                        .split_first()
-                        .ok_or_else(|| eyre!("Semi-phrase split failed {:?}", semi_phrase))?
-                        .1;
-                }
-                let start_timestamp = semi_phrase
-                    .first()
-                    .ok_or_else(|| eyre!("Empty semi-phrase {:?}", semi_phrase))?
-                    .get_timestamp();
-                let end_timestamp = match semi_phrase
-                    .last()
-                    .ok_or_else(|| eyre!("Empty semi-phrase {:?}", semi_phrase))?
-                {
-                    LyricEvent::DuetPhraseStart { timestamp } => timestamp - 1,
-                    LyricEvent::DuetPhraseEnd { timestamp } => *timestamp,
-                    LyricEvent::DuetLyric { timestamp, .. } => timestamp + 1,
-                    _ => unreachable!(),
+                let maybe_timestamp = lyric_events.iter().find(|x| {
+                    (high.is_none() || high.unwrap_or(&0) >= &x.get_timestamp())
+                        && x.get_timestamp() > *low
+                        && matches!(x, LyricEvent::PhraseEnd { .. })
+                });
+                let end_timestamp = match maybe_timestamp {
+                    Some(x) => x.get_timestamp(),
+                    None => match high {
+                        Some(y) => *y,
+                        None => match lyrics.last() {
+                            Some(z) => z.timestamp + 1,
+                            None => low + 1,
+                        },
+                    },
                 };
-                let lyrics: Vec<PhraseLyric> = semi_phrase
-                    .iter()
-                    .filter_map(|elem| match elem {
-                        LyricEvent::DuetLyric { timestamp, text } => Some(PhraseLyric {
-                            timestamp: *timestamp,
-                            text: text.clone(),
-                        }),
-                        _ => None,
-                    })
-                    .collect();
-                Ok(Phrase {
-                    start_timestamp,
+                Phrase {
+                    start_timestamp: *low,
                     end_timestamp,
                     lyrics,
-                })
+                }
             })
-            .collect::<Result<Vec<Phrase>>>()?;
-        Ok(Self { main, duet })
+            .collect()
     }
 
     pub const fn get_main_phrases(&self) -> &Vec<Phrase> {
@@ -167,7 +138,6 @@ mod test {
     use std::io::Read;
 
     use color_eyre::eyre::WrapErr;
-    use indicatif::ProgressBar;
 
     use crate::chart::Chart;
 
@@ -176,16 +146,13 @@ mod test {
     #[test]
     fn phrase_loading() -> Result<()> {
         let dir: Vec<_> = fs::read_dir("./charts/")?.collect();
-        let bar = ProgressBar::new(dir.len() as u64);
         for folder in dir {
-            bar.inc(1);
             let entry = folder?;
             phrase_loading_helper(&entry).wrap_err(format!(
                 "Error occurred for chart file {}",
                 &entry.file_name().to_str().unwrap_or("filename failure")
             ))?;
         }
-        bar.finish();
         Ok(())
     }
 
@@ -197,23 +164,27 @@ mod test {
         let mut file_content = String::new();
         file.read_to_string(&mut file_content)?;
         let chart = Chart::from(&file_content)?;
-        LyricPhrases::new(chart.get_lyrics())?;
+        assert_eq!(
+            LyricPhrases::new(chart.get_lyrics()).main.len(),
+            chart
+                .get_lyrics()
+                .iter()
+                .filter(|x| matches!(x, LyricEvent::PhraseStart { .. }))
+                .count()
+        );
         Ok(())
     }
 
     #[test]
     fn phrase_to_string() -> Result<()> {
         let dir: Vec<_> = fs::read_dir("./charts/")?.collect();
-        let bar = ProgressBar::new(dir.len() as u64);
         for folder in dir {
-            bar.inc(1);
             let entry = folder?;
             phrase_to_string_helper(&entry).wrap_err(format!(
                 "Error occurred for chart file {}",
                 &entry.file_name().to_str().unwrap_or("filename failure")
             ))?;
         }
-        bar.finish();
         Ok(())
     }
 
@@ -225,7 +196,7 @@ mod test {
         let mut file_content = String::new();
         file.read_to_string(&mut file_content)?;
         let chart = Chart::from(&file_content)?;
-        let phrases = LyricPhrases::new(chart.get_lyrics())?;
+        let phrases = LyricPhrases::new(chart.get_lyrics());
         let string = phrases
             .get_main_phrases()
             .iter()
@@ -233,11 +204,10 @@ mod test {
             .collect::<String>();
         assert_eq!(
             string.is_empty(),
-            chart.get_lyrics().is_empty()
-                | chart
-                    .get_lyrics()
-                    .iter()
-                    .all(|x| matches!(x, LyricEvent::Section { .. } | LyricEvent::OtherLyricEvent { .. }))
+            !chart.get_lyrics().iter().any(|x| !matches!(
+                x,
+                LyricEvent::Section { .. } | LyricEvent::OtherLyricEvent { .. }
+            ))
         );
         Ok(())
     }

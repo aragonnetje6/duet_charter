@@ -83,10 +83,7 @@ impl Component for Main {
             Msg::Parsed() => match &self.chart {
                 None => false,
                 Some(chart) => {
-                    match LyricPhrases::new(chart.get_lyrics()) {
-                        Ok(phrases) => self.phrases = Some(phrases),
-                        Err(x) => self.error = Some(x),
-                    };
+                    self.phrases = Some(LyricPhrases::new(chart.get_lyrics()));
                     true
                 }
             },

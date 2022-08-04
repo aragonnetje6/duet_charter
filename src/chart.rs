@@ -144,6 +144,7 @@ impl TimestampedEvent for TempoEvent {
     }
 }
 
+#[derive(Debug)]
 pub struct Chart {
     properties: HashMap<String, String>,
     lyrics: Vec<LyricEvent>,
@@ -357,23 +358,19 @@ mod test {
     use std::io::Read;
 
     use color_eyre::eyre::WrapErr;
-    use indicatif::ProgressBar;
 
     use super::*;
 
     #[test]
     fn load_test() -> Result<()> {
         let dir: Vec<_> = fs::read_dir("./charts/")?.collect();
-        let bar = ProgressBar::new(dir.len() as u64);
         for folder in dir {
-            bar.inc(1);
             let entry = folder?;
             load_test_helper(&entry).wrap_err(format!(
                 "Error occurred for chart file {}",
                 &entry.file_name().to_str().unwrap_or("filename failure")
             ))?;
         }
-        bar.finish();
         Ok(())
     }
 
