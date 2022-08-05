@@ -35,7 +35,7 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v1
       - name: Install Trunk
-        run: brew install trunk | tar -xzf-; rustup target add wasm32-unknown-unknown;
+        run: brew install trunk; rustup target add wasm32-unknown-unknown;
       - name: Build with Trunk
         run: trunk build --release --public-url /lyric_charter/ ./lyric_charter_web/index.html;
       - name: Build with Jekyll
