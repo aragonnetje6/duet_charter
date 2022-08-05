@@ -6,7 +6,7 @@ use clap::Parser;
 use eyre::Result;
 
 use lyric_charter_lib::chart::Chart;
-use lyric_charter_lib::phrases::LyricPhrases;
+use lyric_charter_lib::phrases::LyricPhraseCollection;
 
 /// Commandline lyric charting tool for Clone Hero .chart files!
 #[derive(Parser, Debug)]
@@ -32,8 +32,8 @@ fn main() -> Result<()> {
     let mut file = fs::File::open(source)?;
     let mut file_str = String::new();
     file.read_to_string(&mut file_str)?;
-    let chart = Chart::from(&file_str)?;
-    let phrases = LyricPhrases::new(chart.get_lyrics());
+    let chart = Chart::new(&file_str)?;
+    let phrases = LyricPhraseCollection::new(chart.get_lyrics());
     println!("main: {:?}", phrases.get_main_phrases());
     println!("duet: {:?}", phrases.get_duet_phrases());
     let mut out_file = fs::File::create(dest)?;

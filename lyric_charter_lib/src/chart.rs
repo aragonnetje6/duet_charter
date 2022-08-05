@@ -3,9 +3,12 @@ use std::collections::HashMap;
 use eyre::{eyre, Result, WrapErr};
 use regex::Regex;
 
-use LyricEvent::{Lyric, PhraseEnd, PhraseStart, Section, DuetLyric, DuetPhraseEnd, DuetPhraseStart, OtherLyricEvent};
-use KeyPressEvent::{Note, Special, TextEvent, OtherKeyPress};
-use TempoEvent::{Anchor, Beat, TimeSignature, OtherTempoEvent};
+use KeyPressEvent::{Note, OtherKeyPress, Special, TextEvent};
+use LyricEvent::{
+    DuetLyric, DuetPhraseEnd, DuetPhraseStart, Lyric, OtherLyricEvent, PhraseEnd, PhraseStart,
+    Section,
+};
+use TempoEvent::{Anchor, Beat, OtherTempoEvent, TimeSignature};
 
 pub trait TimestampedEvent {
     fn get_timestamp(&self) -> u32;
@@ -149,7 +152,35 @@ pub struct Chart {
 }
 
 impl Chart {
-    pub fn from(chart_file: &str) -> Result<Self> {
+    /// Creates a chart struct by parsing the passed string representation of a .chart file.
+    ///
+    /// # Arguments
+    ///
+    /// * `chart_file`: the contents of the .chart file to parse.
+    ///
+    /// returns: `Result<Chart, Report>`
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if the string does not represent a valid .chart file.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::fs;
+    /// use std::io::Read;
+    /// use regex::Regex;
+    /// use lyric_charter_lib::chart::Chart;
+    ///
+    /// let mut file_content = String::new();
+    /// fs::File::open("../charts/Adagio - Second Sight [Peddy]/notes.chart")
+    ///     .unwrap()
+    ///     .read_to_string(&mut file_content)
+    ///     .expect("file reading failed");
+    ///
+    /// let chart: Chart = Chart::new(&file_content).unwrap();
+    /// ```
+    pub fn new(chart_file: &str) -> Result<Self> {
         // initialise regexes
         let header_regex = Regex::new("\\[(?P<header>[^]]+)]")?;
         let line_regex =
@@ -331,18 +362,22 @@ impl Chart {
         Ok(())
     }
 
+    #[must_use]
     pub const fn get_properties(&self) -> &HashMap<String, String> {
         &self.properties
     }
 
+    #[must_use]
     pub const fn get_lyrics(&self) -> &Vec<LyricEvent> {
         &self.lyrics
     }
 
+    #[must_use]
     pub const fn get_tempo_map(&self) -> &Vec<TempoEvent> {
         &self.tempo_map
     }
 
+    #[must_use]
     pub const fn get_key_presses(&self) -> &HashMap<String, Vec<KeyPressEvent>> {
         &self.key_presses
     }
@@ -377,7 +412,7 @@ mod test {
         let mut file = fs::File::open(&path)?;
         let mut file_content = String::new();
         file.read_to_string(&mut file_content)?;
-        Chart::from(&file_content)?;
+        Chart::new(&file_content)?;
         Ok(())
     }
 }
