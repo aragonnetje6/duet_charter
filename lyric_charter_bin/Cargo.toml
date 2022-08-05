@@ -11,3 +11,4 @@ license-file = "LICENSE.md"
 [dependencies]
 lyric_charter_lib = { path = "../lyric_charter_lib", version = "0.1.0"}
 clap = { version = "3.2.16", features = ["derive"] }
+eyre = "0.6.8"
