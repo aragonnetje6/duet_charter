@@ -2,12 +2,18 @@ use std::fmt::{Display, Formatter};
 use std::ops::Add;
 
 use crate::chart::LyricEvent;
-use crate::chart::TimestampedEvent;
+use crate::TimestampedEvent;
 
 #[derive(Debug)]
 pub struct PhraseLyric {
     timestamp: u32,
     text: String,
+}
+
+impl TimestampedEvent for PhraseLyric {
+    fn get_timestamp(&self) -> u32 {
+        self.timestamp
+    }
 }
 
 #[derive(Debug)]

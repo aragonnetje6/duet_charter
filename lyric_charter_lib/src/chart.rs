@@ -9,10 +9,7 @@ use LyricEvent::{
     Section,
 };
 use TempoEvent::{Anchor, Beat, OtherTempoEvent, TimeSignature};
-
-pub trait TimestampedEvent {
-    fn get_timestamp(&self) -> u32;
-}
+use crate::TimestampedEvent;
 
 macro_rules! read_capture {
     ($captures:expr, $name:expr) => {
