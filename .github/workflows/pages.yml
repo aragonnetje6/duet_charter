@@ -37,7 +37,7 @@ jobs:
       - name: Install Trunk
         run: brew install trunk; rustup target add wasm32-unknown-unknown;
       - name: Build with Trunk
-        run: trunk build --release --public-url /lyric_charter/ ./duet_charter_web/index.html;
+        run: trunk build --release --public-url /duet_charter/ ./duet_charter_web/index.html;
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
         with:
