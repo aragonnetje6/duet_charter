@@ -167,7 +167,7 @@ impl Chart {
     /// use std::fs;
     /// use std::io::Read;
     /// use regex::Regex;
-    /// use lyric_charter_lib::chart::Chart;
+    /// use duet_charter_lib::chart::Chart;
     ///
     /// let mut file_content = String::new();
     /// fs::File::open("../charts/Adagio - Second Sight [Peddy]/notes.chart")

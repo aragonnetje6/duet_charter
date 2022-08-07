@@ -5,8 +5,8 @@ use std::path::Path;
 use clap::Parser;
 use eyre::Result;
 
-use lyric_charter_lib::chart::Chart;
-use lyric_charter_lib::phrases::LyricPhraseCollection;
+use duet_charter_lib::chart::Chart;
+use duet_charter_lib::phrases::LyricPhraseCollection;
 
 /// Commandline lyric charting tool for Clone Hero .chart files!
 #[derive(Parser, Debug)]

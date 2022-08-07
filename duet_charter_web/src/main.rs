@@ -6,9 +6,9 @@ use gloo::file::File;
 use web_sys::{console, HtmlInputElement};
 use yew::prelude::*;
 
-use lyric_charter_lib::chart::Chart;
+use duet_charter_lib::chart::Chart;
 
-use lyric_charter_lib::phrases::LyricPhraseCollection;
+use duet_charter_lib::phrases::LyricPhraseCollection;
 
 enum Msg {
     Files(Result<Vec<File>>),

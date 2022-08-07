@@ -64,8 +64,8 @@ impl LyricPhraseCollection {
     /// use std::fs;
     /// use std::io::Read;
     /// use regex::Regex;
-    /// use lyric_charter_lib::chart::Chart;
-    /// use lyric_charter_lib::phrases::LyricPhraseCollection;
+    /// use duet_charter_lib::chart::Chart;
+    /// use duet_charter_lib::phrases::LyricPhraseCollection;
     ///
     /// let mut file_content = String::new();
     /// fs::File::open("../charts/Adagio - Second Sight [Peddy]/notes.chart")
