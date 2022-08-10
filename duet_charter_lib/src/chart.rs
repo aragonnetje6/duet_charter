@@ -155,7 +155,7 @@ impl Chart {
     ///
     /// * `chart_file`: the contents of the .chart file to parse.
     ///
-    /// returns: `Result<Chart, Report>`
+    /// returns: `Result<Chart, eyre::Report>`
     ///
     /// # Errors
     ///
@@ -179,9 +179,9 @@ impl Chart {
     /// ```
     pub fn new(chart_file: &str) -> Result<Self> {
         // initialise regexes
-        let header_regex = Regex::new("\\[(?P<header>[^]]+)]")?;
+        let header_regex = Regex::new(r"\[(?P<header>[^]]+)]")?;
         let line_regex =
-            Regex::new(" {2}(?P<timestamp>\\d+) = (?P<type>\\w+) (?P<content>[^\\n\\r]+)")?;
+            Regex::new(r" {2}(?P<timestamp>\d+) = (?P<type>\w+) (?P<content>[^\n\r]+)")?;
 
         // declare output variables
         let mut properties = HashMap::new();
@@ -211,7 +211,7 @@ impl Chart {
     }
 
     fn decode_properties(properties: &mut HashMap<String, String>, section: &str) -> Result<()> {
-        Regex::new(" {2}(?P<property>[^ =]+) = (?P<content>[^\\n\\r]+)")?
+        Regex::new(r" {2}(?P<property>[^ =]+) = (?P<content>[^\n\r]+)")?
             .captures_iter(section)
             .try_for_each(|captures| {
                 let property = read_capture!(captures, "property").to_owned();
