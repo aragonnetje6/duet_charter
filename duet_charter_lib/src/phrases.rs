@@ -2,12 +2,18 @@ use std::fmt::{Display, Formatter};
 use std::ops::Add;
 
 use crate::chart::LyricEvent;
-use crate::chart::TimestampedEvent;
+use crate::TimestampedEvent;
 
 #[derive(Debug)]
 pub struct PhraseLyric {
     timestamp: u32,
     text: String,
+}
+
+impl TimestampedEvent for PhraseLyric {
+    fn get_timestamp(&self) -> u32 {
+        self.timestamp
+    }
 }
 
 #[derive(Debug)]
@@ -38,13 +44,39 @@ impl Display for Phrase {
 }
 
 #[derive(Debug)]
-pub struct LyricPhrases {
-    main: Vec<Phrase>,
-    duet: Vec<Phrase>,
+pub struct LyricPhraseCollection {
+    main_phrases: Vec<Phrase>,
+    duet_phrases: Vec<Phrase>,
 }
 
-impl LyricPhrases {
-    pub fn new(lyrics_events: &[LyricEvent]) -> Self {
+impl LyricPhraseCollection {
+    /// Constructor for `LyricPhraseCollection` from a collection of `LyricEvent`s.
+    ///
+    /// # Arguments
+    ///
+    /// * `lyrics_events`: the collection of `LyricEvent`s to build the phrases out of.
+    ///
+    /// returns: `LyricPhraseCollection`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::fs;
+    /// use std::io::Read;
+    /// use regex::Regex;
+    /// use duet_charter_lib::chart::Chart;
+    /// use duet_charter_lib::phrases::LyricPhraseCollection;
+    ///
+    /// let mut file_content = String::new();
+    /// fs::File::open("../charts/Adagio - Second Sight [Peddy]/notes.chart")
+    ///     .unwrap()
+    ///     .read_to_string(&mut file_content)
+    ///     .expect("file reading failed");
+    ///
+    /// let chart = Chart::new(&file_content).unwrap();
+    /// let phrases = LyricPhraseCollection::new(chart.get_lyrics());
+    /// ```
+    #[must_use] pub fn new(lyrics_events: &[LyricEvent]) -> Self {
         let duet_only = lyrics_events
             .iter()
             .filter_map(|event| match event {
@@ -67,7 +99,7 @@ impl LyricPhrases {
             .collect::<Vec<LyricEvent>>();
         let main = Self::parse_phrases_from(lyrics_events);
         let duet = Self::parse_phrases_from(&duet_only);
-        Self { main, duet }
+        Self { main_phrases: main, duet_phrases: duet }
     }
 
     fn parse_phrases_from(lyric_events: &[LyricEvent]) -> Vec<Phrase> {
@@ -121,12 +153,12 @@ impl LyricPhrases {
             .collect()
     }
 
-    pub const fn get_main_phrases(&self) -> &Vec<Phrase> {
-        &self.main
+    #[must_use] pub const fn get_main_phrases(&self) -> &Vec<Phrase> {
+        &self.main_phrases
     }
 
-    pub const fn get_duet_phrases(&self) -> &Vec<Phrase> {
-        &self.duet
+    #[must_use] pub const fn get_duet_phrases(&self) -> &Vec<Phrase> {
+        &self.duet_phrases
     }
 }
 
@@ -161,9 +193,9 @@ mod test {
         let mut file = fs::File::open(&path)?;
         let mut file_content = String::new();
         file.read_to_string(&mut file_content)?;
-        let chart = Chart::from(&file_content)?;
+        let chart = Chart::new(&file_content)?;
         assert_eq!(
-            LyricPhrases::new(chart.get_lyrics()).main.len(),
+            LyricPhraseCollection::new(chart.get_lyrics()).main_phrases.len(),
             chart
                 .get_lyrics()
                 .iter()
@@ -193,8 +225,8 @@ mod test {
         let mut file = fs::File::open(&path)?;
         let mut file_content = String::new();
         file.read_to_string(&mut file_content)?;
-        let chart = Chart::from(&file_content)?;
-        let phrases = LyricPhrases::new(chart.get_lyrics());
+        let chart = Chart::new(&file_content)?;
+        let phrases = LyricPhraseCollection::new(chart.get_lyrics());
         let string = phrases
             .get_main_phrases()
             .iter()

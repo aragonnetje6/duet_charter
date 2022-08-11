@@ -6,9 +6,9 @@ use gloo::file::File;
 use web_sys::{console, HtmlInputElement};
 use yew::prelude::*;
 
-use lyric_charter_lib::chart::Chart;
+use duet_charter_lib::chart::Chart;
 
-use lyric_charter_lib::phrases::LyricPhrases;
+use duet_charter_lib::phrases::LyricPhraseCollection;
 
 enum Msg {
     Files(Result<Vec<File>>),
@@ -20,7 +20,7 @@ struct Main {
     readers: HashMap<String, FileReader>,
     chart: Option<Chart>,
     error: Option<ErrReport>,
-    phrases: Option<LyricPhrases>,
+    phrases: Option<LyricPhraseCollection>,
 }
 
 impl Component for Main {
@@ -61,7 +61,7 @@ impl Component for Main {
             }
             Msg::Loaded(file_name, data) => {
                 self.readers.remove(&file_name);
-                match Chart::from(&data) {
+                match Chart::new(&data) {
                     Ok(chart) => {
                         self.chart = Some(chart);
                         self.error = None;
@@ -77,7 +77,7 @@ impl Component for Main {
             Msg::Parsed() => match &self.chart {
                 None => false,
                 Some(chart) => {
-                    self.phrases = Some(LyricPhrases::new(chart.get_lyrics()));
+                    self.phrases = Some(LyricPhraseCollection::new(chart.get_lyrics()));
                     true
                 }
             },

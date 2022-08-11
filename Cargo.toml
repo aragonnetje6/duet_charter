@@ -1,7 +1,7 @@
 [workspace]
 
 members = [
-	"lyric_charter_web",
-	"lyric_charter_lib",
-	"lyric_charter_bin",
+	"duet_charter_web",
+	"duet_charter_lib",
+	"duet_charter_bin",
 ]

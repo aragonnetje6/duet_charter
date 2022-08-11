@@ -1,14 +1,18 @@
 [package]
-name = "lyric_charter_bin"
-version = "0.1.0"
+name = "duet_charter_bin"
+version = "0.1.1"
 edition = "2021"
-description = "Commandline lyric charting tool for Clone Hero .chart files!"
+description = "Commandline duet charting tool for Clone Hero .chart files!"
 repository = "https://github.com/aragonnetje6/lyric_charter"
 keywords = ["CloneHero", "cli"]
 categories = ["parser-implementations", "games", "game-development"]
 license-file = "LICENSE.md"
 
 [dependencies]
-lyric_charter_lib = { path = "../lyric_charter_lib", version = "0.1.0"}
+duet_charter_lib = { path = "../duet_charter_lib", version = "0.1.1"}
 clap = { version = "3.2.16", features = ["derive"] }
 eyre = "0.6.8"
+
+[[bin]]
+path = "src/main.rs"
+name = "duet_chart"
