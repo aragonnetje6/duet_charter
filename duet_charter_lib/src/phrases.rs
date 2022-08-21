@@ -2,9 +2,13 @@ use std::fmt::{Display, Formatter};
 use std::ops::Add;
 
 use crate::chart::LyricEvent;
+use crate::chart::LyricEvent::{
+    DuetLyric, DuetPhraseEnd, DuetPhraseStart, Lyric, OtherLyricEvent, PhraseEnd, PhraseStart,
+    Section,
+};
 use crate::TimestampedEvent;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PhraseLyric {
     timestamp: u32,
     text: String,
@@ -16,7 +20,7 @@ impl TimestampedEvent for PhraseLyric {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Phrase {
     start_timestamp: u32,
     end_timestamp: u32,
@@ -76,37 +80,41 @@ impl LyricPhraseCollection {
     /// let chart = Chart::new(&file_content).unwrap();
     /// let phrases = LyricPhraseCollection::new(chart.get_lyrics());
     /// ```
-    #[must_use] pub fn new(lyrics_events: &[LyricEvent]) -> Self {
+    #[must_use]
+    pub fn new(lyrics_events: &[LyricEvent]) -> Self {
         let duet_only = lyrics_events
             .iter()
             .filter_map(|event| match event {
-                LyricEvent::DuetPhraseStart { timestamp } => Some(LyricEvent::PhraseStart {
+                DuetPhraseStart { timestamp } => Some(PhraseStart {
                     timestamp: *timestamp,
                 }),
-                LyricEvent::DuetPhraseEnd { timestamp } => Some(LyricEvent::PhraseEnd {
+                DuetPhraseEnd { timestamp } => Some(PhraseEnd {
                     timestamp: *timestamp,
                 }),
-                LyricEvent::DuetLyric { timestamp, text } => Some(LyricEvent::Lyric {
+                DuetLyric { timestamp, text } => Some(Lyric {
                     timestamp: *timestamp,
                     text: text.clone(),
                 }),
-                LyricEvent::PhraseStart { .. }
-                | LyricEvent::PhraseEnd { .. }
-                | LyricEvent::Lyric { .. }
-                | LyricEvent::Section { .. }
-                | LyricEvent::OtherLyricEvent { .. } => None,
+                PhraseStart { .. }
+                | PhraseEnd { .. }
+                | Lyric { .. }
+                | Section { .. }
+                | OtherLyricEvent { .. } => None,
             })
             .collect::<Vec<LyricEvent>>();
         let main = Self::parse_phrases_from(lyrics_events);
         let duet = Self::parse_phrases_from(&duet_only);
-        Self { main_phrases: main, duet_phrases: duet }
+        Self {
+            main_phrases: main,
+            duet_phrases: duet,
+        }
     }
 
     fn parse_phrases_from(lyric_events: &[LyricEvent]) -> Vec<Phrase> {
         let timestamps: Vec<u32> = lyric_events
             .iter()
             .filter_map(|x| match x {
-                LyricEvent::PhraseStart { timestamp } => Some(*timestamp),
+                PhraseStart { timestamp } => Some(*timestamp),
                 _ => None,
             })
             .collect();
@@ -122,7 +130,7 @@ impl LyricPhraseCollection {
                             && lyric.get_timestamp() >= *low
                     })
                     .filter_map(|lyric| match lyric {
-                        LyricEvent::Lyric { timestamp, text } => Some(PhraseLyric {
+                        Lyric { timestamp, text } => Some(PhraseLyric {
                             timestamp: *timestamp,
                             text: text.clone(),
                         }),
@@ -132,7 +140,7 @@ impl LyricPhraseCollection {
                 let maybe_timestamp = lyric_events.iter().find(|x| {
                     (high.is_none() || high.unwrap_or(&0) >= &x.get_timestamp())
                         && x.get_timestamp() > *low
-                        && matches!(x, LyricEvent::PhraseEnd { .. })
+                        && matches!(x, PhraseEnd { .. })
                 });
                 let end_timestamp = match maybe_timestamp {
                     Some(x) => x.get_timestamp(),
@@ -153,11 +161,47 @@ impl LyricPhraseCollection {
             .collect()
     }
 
-    #[must_use] pub const fn get_main_phrases(&self) -> &Vec<Phrase> {
+    pub fn encode(&self) -> Vec<LyricEvent> {
+        let main = self.main_phrases.clone();
+        let mut duet = self.duet_phrases.clone();
+        let mut result: Vec<LyricEvent> = vec![];
+        for main_phrase in main.iter() {
+            match duet.first() {
+                None => Self::encode_single(main_phrase, &mut result),
+                Some(duet_phrase) => {
+                    if duet_phrase.start_timestamp > main_phrase.start_timestamp {
+                        Self::encode_single(main_phrase, &mut result);
+                    } else {
+                        todo!()
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    fn encode_single(phrase: &Phrase, result: &mut Vec<LyricEvent>) {
+        result.push(PhraseStart {
+            timestamp: phrase.start_timestamp,
+        });
+        for syllable in &phrase.lyrics {
+            result.push(Lyric {
+                timestamp: syllable.timestamp,
+                text: syllable.text.clone(),
+            });
+        }
+        result.push(PhraseEnd {
+            timestamp: phrase.end_timestamp,
+        });
+    }
+
+    #[must_use]
+    pub const fn get_main_phrases(&self) -> &Vec<Phrase> {
         &self.main_phrases
     }
 
-    #[must_use] pub const fn get_duet_phrases(&self) -> &Vec<Phrase> {
+    #[must_use]
+    pub const fn get_duet_phrases(&self) -> &Vec<Phrase> {
         &self.duet_phrases
     }
 }
@@ -167,7 +211,7 @@ mod test {
     use std::fs;
     use std::io::Read;
 
-    use eyre::{WrapErr, Result};
+    use eyre::{Result, WrapErr};
 
     use crate::chart::Chart;
 
@@ -195,11 +239,13 @@ mod test {
         file.read_to_string(&mut file_content)?;
         let chart = Chart::new(&file_content)?;
         assert_eq!(
-            LyricPhraseCollection::new(chart.get_lyrics()).main_phrases.len(),
+            LyricPhraseCollection::new(chart.get_lyrics())
+                .main_phrases
+                .len(),
             chart
                 .get_lyrics()
                 .iter()
-                .filter(|x| matches!(x, LyricEvent::PhraseStart { .. }))
+                .filter(|x| matches!(x, PhraseStart { .. }))
                 .count()
         );
         Ok(())
@@ -234,10 +280,10 @@ mod test {
             .collect::<String>();
         assert_eq!(
             string.is_empty(),
-            !chart.get_lyrics().iter().any(|x| !matches!(
-                x,
-                LyricEvent::Section { .. } | LyricEvent::OtherLyricEvent { .. }
-            ))
+            !chart
+                .get_lyrics()
+                .iter()
+                .any(|x| !matches!(x, Section { .. } | OtherLyricEvent { .. }))
         );
         Ok(())
     }

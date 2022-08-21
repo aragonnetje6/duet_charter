@@ -118,6 +118,7 @@ impl Component for Main {
                                 <li><a href="#notes">{ "Notes" }</a></li>
                                 if self.phrases.is_some() {
                                     <li><a href="#phrases">{ "Phrases" }</a></li>
+                                    <li><a href="#re-encoded_lyrics">{ "Re-encoded lyrics" }</a></li>
                                 }
                             </ol>
                         </section>
@@ -164,6 +165,13 @@ impl Component for Main {
                         <a href="#toc">{ "^" }</a>
                         <ul>
                             { for phrases.get_duet_phrases().iter().map(|event| html!{ <li> { format!("{}", event) } </li> }) }
+                        </ul>
+                    </section>
+                    <section id = "re-encoded_lyrics">
+                        <h1>{ "Re-encoded lyrics:" }</h1>
+                        <a href="#toc">{ "^" }</a>
+                        <ul>
+                            { for phrases.encode().iter().map(|event| html!{ <li> { format!("{:?}", event) } </li> }) }
                         </ul>
                     </section>
                 }
